@@ -12,6 +12,7 @@ using namespace std;
 #define	EVIDENCEDUMPFILENAME "evidencedump.dat"
 #define PROPOSALDUMPFILENAME "proposaldump.dat"
 #define PROPOSALISOLATEDTERMSDUMPFILE "proposalITdump.dat"
+#define CLAUSESDUMPFILE "clausesdump.dat"
 
 struct LSymbolDump
 {
@@ -132,6 +133,130 @@ struct LFileDump
 		dumpSymbols(mln,symbolsdumpfile);
 		delete out;
 	}
+
+	static void dumpClausesToFile(vector<WClause*> clauses,string clausesdumpfile = CLAUSESDUMPFILE)
+	{
+		ofstream* out = new ofstream(clausesdumpfile.c_str());
+		
+		//write all clauses in a specific format
+		for(unsigned int i=0;i<clauses.size();i++)
+		{
+			printClause(out,clauses[i]);
+			(*out)<<endl;
+		}
+		out->close();
+		delete out;
+	}
+
+	static void readDumpedclausesFromFile(vector<WClause*>& clauses,string clausesdumpfile = CLAUSESDUMPFILE)
+	{
+		fstream filestr(clausesdumpfile.c_str());
+		if(filestr == NULL)
+		{
+			cout<<"Error reading LvrMLN File"<<endl;
+			exit(-1);
+		}
+		//char* buf = new char[1024];
+		while(filestr)
+		{
+			//filestr.getline(buf,1024);
+			string line;
+			getline(filestr,line);
+			if(line.size()==0)
+				continue;
+			bool sat = false;
+			//check for empty clauses
+			{
+				if(line[2] == '0')
+				{
+					if(line[0]=='1')
+					{
+						sat=true;
+					}
+					string str = line.substr(6);
+					stringstream sstr(str);
+					double wt;
+					sstr >> wt;
+					WClause* empClause = new WClause();
+					empClause->satisfied = sat;
+					empClause->weight = LogDouble(wt,false);
+					clauses.push_back(empClause);
+					continue;
+				}
+			}
+
+			vector<string> tokens;
+			LStringConversionUtils::tokenize(line,tokens,"@");
+			int pos = tokens[0].find(":");
+			int sVal;
+			stringstream str(tokens[0].substr(0,pos));
+			str>>sVal;
+			if(sVal==1)
+				sat=true;
+			//string remaining = tokens[0].substr(0,pos+1);
+			//string nAtomsS = tokens[0].substr(0,pos);
+			int p1 = tokens[0].rfind(":");
+
+			string atomsS = tokens[0].substr(p1+1);
+			vector<string> atomNames;
+			LStringConversionUtils::tokenize(atomsS,atomNames,"|");
+			vector<LSymbolDump*> sList;
+			vector<PredicateSymbol*> symbols;
+			for(unsigned int i=0;i<atomNames.size();i++)
+			{
+				LSymbolDump* ns = new LSymbolDump();
+				convertToDump(atomNames[i],ns,symbols);
+				sList.push_back(ns);
+			}
+
+			vector<string> toksTerms;
+			LStringConversionUtils::tokenize(tokens[1],toksTerms,"%");
+			vector<vector<LvrTerm*> > atomTerms(sList.size());
+			for(unsigned int i=0;i<atomTerms.size();i++)
+			{
+				atomTerms[i].resize(sList[i]->nTerms);
+			}
+			for(unsigned int i=0;i<toksTerms.size();i++)
+			{
+				int pos = toksTerms[i].find("&");
+				string s1 = toksTerms[i].substr(0,pos);
+				string s2 = toksTerms[i].substr(pos+1);
+				vector<string> dValsS;
+				vector<int> dVals;
+				LStringConversionUtils::tokenize(s1,dValsS,",");
+				LStringConversionUtils::toIntArr(dValsS,dVals);
+				LvrTerm* term = new LvrTerm(0,dVals);
+
+				vector<string> postoks;
+				LStringConversionUtils::tokenize(s2,postoks,",");
+				for(unsigned int j=0;j<postoks.size();j++)
+				{
+					int pos = postoks[j].find(":");
+					string s1 = postoks[j].substr(0,pos);
+					string s2 = postoks[j].substr(pos+1);
+					int apos = LStringConversionUtils::toInt(s1);
+					int tpos = LStringConversionUtils::toInt(s2);
+					atomTerms[apos].at(tpos) = term;
+				}
+			}
+			WClause* clause = new WClause();
+			//create the clause
+			for(unsigned int i=0;i<atomTerms.size();i++)
+			{
+				Atom* atom = new Atom(symbols[i],atomTerms[i]);
+				clause->atoms.push_back(atom);
+				if(sList[i]->sign == 0)
+					clause->sign.push_back(true);
+				else
+					clause->sign.push_back(false);
+			}
+			clause->weight = LogDouble(LStringConversionUtils::toDouble(tokens[2]),false);
+			clause->satisfied=sat;
+			clauses.push_back(clause);
+		}
+		filestr.close();
+	}
+
 	static void dumpQueriesToFile(vector<vector<int> > intRep,string queriesdumpfile = QUERIESDUMPFILENAME)
 	{
 		ofstream* out = new ofstream(queriesdumpfile.c_str());
@@ -260,6 +385,7 @@ struct LFileDump
 					WClause* empClause = new WClause();
 					empClause->satisfied = sat;
 					empClause->weight = LogDouble(wt,false);
+					mln.clauses.push_back(empClause);
 					continue;
 				}
 			}

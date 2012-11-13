@@ -120,7 +120,7 @@ bool LBlockExactInference::decomposeCNF(vector<WClause*>& CNF,int& powerFactor,v
 				{
 					vector<int> vals(2);
 					vals[0] = it->first;vals[1]=it->second;
-					unsigned int hash = LvrHashAlgorithm::DJBHash(vals);
+					unsigned int hash = LvrHashAlgorithm::DJBHashUS(vals);
 					decompMapping.insert(pair<int,int>(hash,0));
 				}
 				decomposerMappings.push_back(decompMapping);
