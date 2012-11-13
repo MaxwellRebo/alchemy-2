@@ -169,19 +169,33 @@ struct LvrNormPropagation
 			}
 			vector<vector<int> > permutedList;
 			LvrPermutations::permuteTerms(nonIsolatedTerms,permutedList);
-			vector<int> signature;
-			signature.push_back(atomToSplit->symbol->normParentId);
+			vector<vector<int> > signature;
+			vector<int> id(1);id[0] = atomToSplit->symbol->normParentId;
+			signature.push_back(id);
+			//signature.push_back(atomToSplit->symbol->normParentId);
 			for(unsigned int i=0;i<permutedList.size();i++)
 			{
 				int iter=0;
 				for(unsigned int j=0;j<isolatedTerms.size();j++)
 				{
 					if(isolatedTerms[j])
-						signature.push_back(atomToSplit->terms[j]->domain.size());
+					{
+						//signature.push_back(atomToSplit->terms[j]->domain.size());
+						vector<int> doms;
+						for(unsigned int k=0;k<atomToSplit->terms[j]->domain.size();k++)
+						{
+							doms.push_back(atomToSplit->terms[j]->domain[k]);
+						}
+						signature.push_back(doms);
+					}
 					else
-						signature.push_back(permutedList[i].at(iter++));
+					{
+						vector<int> dm(1);dm[0] = permutedList[i].at(iter++);
+						signature.push_back(dm);
+						//signature.push_back(permutedList[i].at(iter++));
+					}
 				}
-				isolatedHashCodeMap.insert(pair<int,int>(LvrHashAlgorithm::DJBHash(signature),numGroundingsToSetTrue[i]));
+				isolatedHashCodeMap.insert(pair<int,int>(LvrHashAlgorithm::DJBLHash(signature),numGroundingsToSetTrue[i]));
 			}
 		}
 		doPropagateNormalizedCNF(CNF,atomToSplit);

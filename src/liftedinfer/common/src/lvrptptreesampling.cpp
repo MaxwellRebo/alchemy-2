@@ -84,7 +84,7 @@ void LvrPTPTreeSampling::sampleTree(LPTPNode* node,vector<map<int,int>* >& added
 				for(unsigned int j=0;j<newAtom->terms.size();j++)
 				{
 					val[1]=j;
-					unsigned int key = LvrHashAlgorithm::DJBHash(val);
+					unsigned int key = LvrHashAlgorithm::DJBHashUS(val);
 					map<int,int>::iterator it1 = (*dMap).find(key);
 					if(it1==(*dMap).end())
 						continue;
