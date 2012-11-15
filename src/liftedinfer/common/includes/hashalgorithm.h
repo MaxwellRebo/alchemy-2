@@ -8,6 +8,7 @@ struct LvrHashAlgorithm
 	//Note:Only to be called for atoms that are completely grounded (no variables)
 	static int DJBHash(vector<int> vals)
 	{
+		augmentVector(vals);
 		unsigned int hash = 5381;
 		for(std::size_t i = 0; i < vals.size(); i++)
 		{
@@ -18,6 +19,7 @@ struct LvrHashAlgorithm
 
 	static unsigned int DJBHashUS(vector<int> vals)
 	{
+		augmentVector(vals);
 		unsigned int hash = 5381;
 		for(std::size_t i = 0; i < vals.size(); i++)
 		{
@@ -64,13 +66,33 @@ struct LvrHashAlgorithm
 			for(unsigned int j=0;j<vals[i].size();j++)
 				signature.push_back(vals[i].at(j));
 		}
+		return DJBHash(signature);
+		/*
 		unsigned int hash = 5381;
 		for(std::size_t i = 0; i < signature.size(); i++)
 		{
 			hash = ((hash << 5) + hash) + signature[i];
 		}
 		return hash;
+		*/
 	}
-
+	
+	//augment the vector with positional information
+	static void augmentVector(vector<int>& input)
+	{
+		vector<int> output;
+		int pos = 1;
+		for(unsigned int i=0;i<input.size();i++)
+		{
+			output.push_back(pos*input[i]);
+			output.push_back(input[i]);
+			pos++;
+		}
+		input.clear();
+		input=output;
+	}
+	
 };
+
+
 #endif
