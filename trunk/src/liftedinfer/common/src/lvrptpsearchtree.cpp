@@ -203,21 +203,24 @@ void LvrPTPSearchTree::updateQueries(LvrPTPNode* node)
 			//full grounding
 			vector<int> hashes;
 			getHashValuesNPAtom(node->atom,hashes);
-			int numGoundings = node->atom->getNumberOfGroundings();
-			for(unsigned int i=1;i<node->children.size();i++)
+			if(hashes.size() > 0)
 			{
-				//convert i to binary sequence
-				vector<int> binvector;
-				LMathUtils::Instance()->toBinary(i,binvector,numGoundings);
-				for(unsigned int k=0;k<binvector.size();k++)
+				int numGoundings = node->atom->getNumberOfGroundings();
+				for(unsigned int i=1;i<node->children.size();i++)
 				{
-					//update only if the atom has a true assignment
-					if(binvector[k]==1)
+					//convert i to binary sequence
+					vector<int> binvector;
+					LMathUtils::Instance()->toBinary(i,binvector,numGoundings);
+					for(unsigned int k=0;k<binvector.size();k++)
 					{
-						set<int> tmphash;
-						tmphash.insert(hashes[k]);
-						LogDouble value = node->children[i]->nodeValue*node->children[i]->downValue;
-						LvrQueryUpdater::Instance()->updateExactQueryWeights(tmphash,value);
+						//update only if the atom has a true assignment
+						if(binvector[k]==1)
+						{
+							set<int> tmphash;
+							tmphash.insert(hashes[k]);
+							LogDouble value = node->children[i]->nodeValue*node->children[i]->downValue;
+							LvrQueryUpdater::Instance()->updateExactQueryWeights(tmphash,value);
+						}
 					}
 				}
 			}

@@ -119,12 +119,12 @@ void LMathUtils::sample(int domainSize,LogDouble& probOfSample, int& value)
 void LMathUtils::toBinary(int num,vector<int>& binVector,int numGroundings)
 {
 	int mask = 1;
-	int iter=0;
+	int iter=numGroundings-1;
 	binVector.resize(numGroundings);
 	while(num)
 	{
 		int x = num & mask;
-		binVector[iter++] = x;
+		binVector[iter--] = x;
 		num = num >> 1;
 	}
 
