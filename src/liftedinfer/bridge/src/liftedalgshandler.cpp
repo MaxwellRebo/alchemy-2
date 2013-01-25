@@ -1,6 +1,6 @@
 #include "liftedalgshandler.h"
 #include "wmconvertor.h"
-#include "testmodelcount.h"
+
 
 LiftedAlgsHandler::LiftedAlgsHandler(LvrMLN& mln_):mln(mln_)
 {

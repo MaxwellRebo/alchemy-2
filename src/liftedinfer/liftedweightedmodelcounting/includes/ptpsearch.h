@@ -28,6 +28,7 @@ struct LPTPSearch
 	LHeuristics* heuristics;
 	LNormalizer* normalizer;
 	time_t starttime;
+	bool dounitpropagate;
 
 	LogDouble startApproxWeightedModelCounting(LvrParams* params);
 	LogDouble startExactWeightedModelCounting(LvrParams* params);

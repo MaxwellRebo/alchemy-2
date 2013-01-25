@@ -224,28 +224,30 @@ LogDouble LPTPSearch::weightedModelCount(vector<WClause*>& CNF,LvrPTPNode* paren
 #ifdef __DEBUG_PRINT1__
 	LvrMLN::print(decomposedList[t],"NORMALIZED");
 #endif
-			LogDouble unitPropVal;
-			if(LvrQueryUpdater::isInstanceCreated())
-				unitPropVal = extensions->unitPropagation(decomposedList[t],true);
-			else
-				unitPropVal = extensions->unitPropagation(decomposedList[t]);
-			if(unitPropVal.is_zero)
+			if(dounitpropagate)
 			{
-				cleanupItems(decomposedList,t);
-#ifdef __DEBUG_PRINT__
-			cout<<"***********UnitPROP***********"<<endl;
-			cout<<"{}"<<endl;
-			cout<<"************UNITProp***************"<<endl;
-#endif
+				LogDouble unitPropVal;
 				if(LvrQueryUpdater::isInstanceCreated())
-					lvrptpSearchTree->createNewNode(ELEAF,djnode,t);
-				return unitPropVal;
+					unitPropVal = extensions->unitPropagation(decomposedList[t],true);
+				else
+					unitPropVal = extensions->unitPropagation(decomposedList[t]);
+				if(unitPropVal.is_zero)
+				{
+					cleanupItems(decomposedList,t);
+	#ifdef __DEBUG_PRINT__
+				cout<<"***********UnitPROP***********"<<endl;
+				cout<<"{}"<<endl;
+				cout<<"************UNITProp***************"<<endl;
+	#endif
+					if(LvrQueryUpdater::isInstanceCreated())
+						lvrptpSearchTree->createNewNode(ELEAF,djnode,t);
+					return unitPropVal;
+				}
+				else
+				{
+					totalVal = totalVal*unitPropVal;
+				}
 			}
-			else
-			{
-				totalVal = totalVal*unitPropVal;
-			}
-			
 	
 #ifdef __DEBUG_PRINT__
 LvrMLN::print(decomposedList[t],"UNITPROP");	
@@ -999,6 +1001,7 @@ LogDouble LPTPSearch::startApproxWeightedModelCounting(LvrParams* params)
 
 LogDouble LPTPSearch::startExactWeightedModelCounting(LvrParams* params)
 {
+	dounitpropagate = true;
 	cout<<"Starting Exact Lifted Model Counting"<<endl;
 	id = 0;
 	normalizer->normalizeClauses(mln.clauses,true,false);
@@ -1009,6 +1012,8 @@ LogDouble LPTPSearch::startExactWeightedModelCounting(LvrParams* params)
 		extensions->setCaching(params->ptpCacheSize);
 	else
 	{
+		//turn off unit propagation
+		dounitpropagate = false;
 		//try to see if we can decompose, if yes only consider part where queries occur
 		vector<WClause*> clausesToConsider;
 		vector<vector<WClause*> > tmpClauses;
