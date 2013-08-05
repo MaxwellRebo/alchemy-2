@@ -32,7 +32,7 @@ bool aisLIS = false;
 double adaptiveLearningRate = -1;
 int proposalUpdateInterval = -1;
 
-int aimd = 1;
+int aimd = 0;
 int acmode = 0;
 int ptpcacheSize = 0;
 double abmf = -1;
@@ -80,9 +80,9 @@ ARGS ARGS::Args[] =
 	   "used with the -cls option"),
 
    //algorithm options
-   ARGS("lvgc", ARGS::Tog, aisLiftedGibbsWithCluster,
-      "Run Lifted Blocked Gibbs sampling and clustering in parallel for marginals,"
-	  "Note:The two algorithms are run as concurrent processes"),
+   //ARGS("lvgc", ARGS::Tog, aisLiftedGibbsWithCluster,
+     // "Run Lifted Blocked Gibbs sampling and clustering in parallel for marginals,"
+	  //"Note:The two algorithms are run as concurrent processes"),
 
    ARGS("lvg", ARGS::Tog, aisLiftedGibbs,
       "Compute marginals using Lifted Blocked Gibbs sampling with a given clustering,"
@@ -104,13 +104,13 @@ ARGS ARGS::Args[] =
         "Compute partition function, marginals using the LIS algorithm"),
 
  ARGS("imd", ARGS::Opt, aimd,
-   	  "[0] Type of importance distribution 0:Informed 1:Binomial 2:Uniform"),
+   	  "[0] Type of importance distribution 0:Adaptive 1:Binomial 2:Uniform"),
 
   ARGS("lr", ARGS::Opt, adaptiveLearningRate,
-	  "[0.001] Learning rate for the adaptive LIS algorithm"),
+	  "[0.1] Learning rate for the adaptive LIS algorithm"),
 
   ARGS("ui",ARGS::Opt,proposalUpdateInterval,
-	   "[50] update interval when using LIS with informed distribution"),
+	   "[200] update interval when using LIS with informed distribution"),
   ARGS("cache",ARGS::Opt,ptpcacheSize,"[0] cache size to be used with PTP Exact Inference"),
        // END: Args specific to stand-alone inference
   ARGS("bmf",ARGS::Opt,abmf,"[1.25] baseline multiplicative factor for clustering;"
@@ -394,7 +394,7 @@ int main(int argc, char* argv[])
 		else
 		{
 			cout<<"No algorithm is specified to be run. Running Lifted Gibbs Sampling to compute Marginals.."<<endl;
-			aisLiftedGibbsWithCluster=true;
+			aisLiftedGibbs=true;
 			runLBGibbs(liftedAlgsConvertor);
 		}
 	}

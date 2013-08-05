@@ -336,7 +336,7 @@ void LNormalizer::renamePredicates(vector<WClause*>& CNF,bool resetIds)
 
 
 
-
+/*
 void LNormalizer::findNPSelfJoinedAtomToGround(vector<WClause*>& CNF,Atom*& atom,vector<bool>& isolatedTerms)
 {
 	atom = NULL;
@@ -414,6 +414,66 @@ void LNormalizer::findNPSelfJoinedAtomToGround(vector<WClause*>& CNF,Atom*& atom
 					return;
 				}
 			}
+		}
+	}
+}
+*/
+
+void LNormalizer::findNPSelfJoinedAtomToGround(vector<WClause*>& CNF,Atom*& atom,vector<bool>& isolatedTerms)
+{
+	atom = NULL;
+	//for all non-poly self joins ground
+	for(unsigned int i=0;i<CNF.size();i++)
+	{
+		//find a candidate to ground self-join (i.e. a non poly self join)
+		WClause* clause = CNF[i];
+		for(unsigned int j=0;j<clause->atoms.size();j++)
+		{
+			int atomid = clause->atoms[j]->symbol->id;
+			bool selfjoined = clause->isSelfJoinedOnAtom(clause->atoms[j]);
+			if(!selfjoined)
+				continue;
+			if(!clause->atoms[j]->isConstant())
+			{
+				int singletonIndex;
+				bool singleton = clause->atoms[j]->isSingletonAtom(singletonIndex);
+				if(singleton)
+				{
+					//if blocked
+					bool blocked = LRulesUtil::isBlocked(clause->atoms[j],singletonIndex,CNF);
+					//bool blocked = false;
+					if(!blocked)
+					{
+						//ground
+						isolatedTerms.resize(clause->atoms[j]->terms.size());
+						atom = clause->atoms[j];
+						return;
+					}
+				}
+				else
+				{
+					//ground	
+					LRulesUtil::computeIsolatedTerms(clause->atoms[j],CNF,isolatedTerms);
+					atom = clause->atoms[j];
+					return;
+				}
+			}
+			//delete all but 1 constant and set to satisfied if there were opposite signs
+			bool possign = false;
+			bool negsign = false;
+			for(unsigned int jj=0;jj<clause->atoms.size();jj++)
+			{
+				if(clause->atoms[jj]->symbol->id == atomid)
+				{
+					if(clause->sign[jj])
+						negsign=true;
+					else
+						possign=true;
+					clause->removeAtom(jj);
+				}
+			}
+			if(possign && negsign)
+				clause->satisfied = true;
 		}
 	}
 }

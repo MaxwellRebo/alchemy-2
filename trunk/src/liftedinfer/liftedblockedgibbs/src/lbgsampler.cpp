@@ -8,6 +8,7 @@ using namespace std;
 #include "stringconversionutils.h"
 
 
+
 int LBGSampler::getClusterIndex(LVRCluster* cluster)
 {
 	for(unsigned int i=0;i<LVRClusterList.size();i++)
@@ -166,6 +167,11 @@ void LBGSampler::startLVBGibbs(LvrParams* params)
 	if(params->burnMaxSteps <= 0)
 		params->burnMaxSteps = BURNINSTEPS;
 	bool clustersRead = false;
+	time_t autotime;
+	time(&autotime);
+	int printind=0;
+	fstream fstr;
+	bool startprint=true;
 	while(1)
 	{
 		if(clusterLevel < 0)
@@ -266,7 +272,7 @@ void LBGSampler::startLVBGibbs(LvrParams* params)
 				vector<WClause*> newClauses;
 				addPTPEvidence(i,newClauses,false);
 				int lvpCost;
-				if(lp->runPTP(newClauses,LVRClusterList[i]) == -1)
+				if(lp->runPTP(newClauses,LVRClusterList[i],params->gibbsRB) == -1)
 				{
 					cout<<"Lifted Gibbs Sampler::Error,trying to reinitialize!!"<<endl;
 					windowSize = RAND_MAX;
@@ -283,28 +289,83 @@ void LBGSampler::startLVBGibbs(LvrParams* params)
 				iterationsInCurrCall++;
 				//cout<<"LBG Sampling Process::Sampling from cluster level "<<clusterLevel<<endl;
 				numTimesSampled++;
-				LvrQueryUpdater::Instance()->updateDontCare();
-				if(!params->isWeightLearning)
+				if(params->gibbsRB)
+					LvrQueryUpdater::Instance()->updateGibbsDontCareRB();
+				else
+					LvrQueryUpdater::Instance()->updateDontCare();
+				if(params->autotest)
 				{
-					if(numTimesSampled%printInterval == 0)
+					time_t cur_t;
+					time(&cur_t);
+					int a_secs = difftime(cur_t,autotime);
+					if(a_secs >= params->printinterval || startprint)
 					{
-						LvrQueryUpdater::Instance()->writeToFile(numTimesSampled);
-						cout<<"LBG Sampling Process::Sampling from cluster level "<<clusterLevel<<",iter="<<numTimesSampled<<endl;
+						if(!startprint)
+							fstr.close();
+						startprint = false;
+						string name(params->fileprefix);
+						printind = printind+params->iprintinterval;
+						stringstream st;
+						st<<printind;
+						name.append(st.str());
+						name.append(".dat");
+						fstr.open (name.c_str(),fstream::out);
+						time(&autotime);
+					}
+					vector<double> probs;
+					if(params->gibbsRB)
+					{
+						LvrQueryUpdater::Instance()->normalizeRB(numTimesSampled);
+					}
+					else
+					{
+						LvrQueryUpdater::Instance()->normalize(numTimesSampled);
+					}
+					probs = LvrQueryUpdater::Instance()->getCurrentProbs();
+					for(unsigned int i=0;i<probs.size();i++)
+					{
+						fstr<<probs[i]<<" ";
+					}
+					fstr<<endl;
+					if(printind >= (int)params->endtime)
+					{
+						fstr.close();
+						return;
+					}
+				}
+				else
+				{
+					if(!params->isWeightLearning)
+					{
+						if(numTimesSampled%printInterval == 0)
+						{
+							if(params->gibbsRB)
+								LvrQueryUpdater::Instance()->writeGibbsRBToFile(numTimesSampled);
+							else
+								LvrQueryUpdater::Instance()->writeToFile(numTimesSampled);
+							cout<<"LBG Sampling Process::Sampling from cluster level "<<clusterLevel<<",iter="<<numTimesSampled<<endl;
+						}
 					}
 				}
 				
 			}
 			time (&end);
 			double dif = difftime (end,start);
-			if(iterationsInCurrCall > params->maxSteps
-					|| dif > params->maxSeconds)
+			if(!params->autotest)
 			{
-				if(!params->isWeightLearning)
+				if(iterationsInCurrCall > params->maxSteps
+						|| dif > params->maxSeconds)
 				{
-					LvrQueryUpdater::Instance()->writeToFile(numTimesSampled);
-					cout<<"Sampling Process exiting"<<endl;
+					if(!params->isWeightLearning)
+					{
+						if(params->gibbsRB)
+							LvrQueryUpdater::Instance()->writeGibbsRBToFile(numTimesSampled);
+						else
+							LvrQueryUpdater::Instance()->writeToFile(numTimesSampled);
+						cout<<"Sampling Process exiting"<<endl;
+					}
+					return;
 				}
-				return;
 			}
 		}
 	}

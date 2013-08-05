@@ -116,6 +116,33 @@ public:
 		}
 	}
 
+	void incrementValue(Atom* atom,LogDouble* value_)
+	{
+		int key = LvrHashAlgorithm::convertToHash(atom);
+		map<int,LogDouble*>::iterator it = data.find(key);
+		if(it!=data.end())
+		{
+			*(it->second) = *(it->second) + (*value_);
+		}
+	}
+	void incrementValue(vector<int> signature,LogDouble* value_)
+	{
+		int key = LvrHashAlgorithm::DJBHash(signature);
+		map<int,LogDouble*>::iterator it = data.find(key);
+		if(it!=data.end())
+		{
+			*(it->second) = *(it->second) + (*value_);
+		}
+	}
+	void incrementValue(int key,LogDouble* value_)
+	{
+		map<int,LogDouble*>::iterator it = data.find(key);
+		if(it!=data.end())
+		{
+			*(it->second) = *(it->second) + (*value_);
+		}
+	}
+
 	T getValue(Atom* atom)
 	{
 		//convert to int rep

@@ -8,7 +8,7 @@ struct LPTPSampler
 {
 	LPTPSampler(LvrMLN& mln);
 	~LPTPSampler();
-	int runPTP(vector<WClause*>& CNF,LVRCluster* cluster);
+	int runPTP(vector<WClause*>& CNF,LVRCluster* cluster,bool rbestimator);
 	int runMockPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster,int& lvpCost,int remainingCost);
 	void setBurnIn(bool val)
 	{
@@ -26,7 +26,7 @@ private:
 	vector<vector<int> > currentSampleValues;
 	//0-not updated,1-updated, -1 - evidence atom
 	vector<vector<int> > queryUpdatedInIteration;
-	void doLightWeightSampling(LVRCluster* lvrCluster,vector<WClause*> clauses);
+	void doLightWeightSampling(LVRCluster* lvrCluster,vector<WClause*> clauses,bool rbestimator);
 };
 
 #endif

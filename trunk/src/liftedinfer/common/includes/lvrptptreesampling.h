@@ -16,9 +16,11 @@ struct LvrPTPTreeSampling
 		LogDouble norm,NodeType nodeType,int nodeId, int parentId, int parentBranchNo,
 		vector<LogDouble>* branchWeights = NULL,LogDouble nodeValue = LogDouble(0,false));
 	LPTPNode* addTreeNode(NodeType nodeType,int nodeId, int parentId, int parentBranchNo,int powerFactor = -1, LogDouble nodeValue=LogDouble(1,false));
-	int startNewSampling();
+	int startNewSampling(bool rbestimator_,bool burnin_);
 	LPTPNode* getRoot();
 	void print();
+	bool rbEstimator;
+	bool burnin;
 private:
 	LPTPTree* ptpTree;
 };

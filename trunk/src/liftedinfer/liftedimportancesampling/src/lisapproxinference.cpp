@@ -5,7 +5,9 @@
 #include "mathutils.h"
 #include "samplingalgs.h"
 #include "queryupdater.h"
-
+#include <sstream>
+#include <fstream>
+using namespace std;
 
 LogDouble LISApproxInference::CNFWeight(vector<WClause*>& CNF)
 {
@@ -235,7 +237,446 @@ LogDouble LISApproxInference::doLvApproxPartitionInformedV1(vector<WClause*>& CN
 	return totalVal;
 }
 
+LogDouble LISApproxInference::doLvApproxPartitionInformed(vector<WClause*>& CNF)
+{
+	LogDouble totalVal(1,false);
+	if(CNF.size()==0)
+	{
+		return totalVal;
+	}	
+	int powerFactor;
+	bool isDecomposed = decomposeCNF(CNF,powerFactor);
+	if(isDecomposed)
+	{
+		LogDouble mcnt = doLvApproxPartitionInformed(CNF);
+		LogDouble val = LogDouble(1,false);
+		LogDouble::LDPower(mcnt,powerFactor,val);
+		totalVal = totalVal*val;
+	}
+	else
+	{
+		int singletonIndex;
+		bool singleton=false;
+		Atom* constatom=NULL;
+		Atom* otheratom=NULL;
+		Atom* singatom=NULL;
+		Atom* tmpAtom = NULL;
+		for(int ii=0;ii<CNF.size();ii++)	
+		{
+		  	bool foundatom=false;
+			for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+			{
+				otheratom = CNF[ii]->atoms[jj];
+				singleton = CNF[ii]->atoms[jj]->isSingletonAtom(singletonIndex);
+				if(singleton)
+				{
+					singatom = CNF[ii]->atoms[jj];
+					foundatom=true;
+					break;
+				}
+				else if(CNF[ii]->atoms[jj]->isConstant())
+					constatom = CNF[ii]->atoms[jj];
+			}
+			if(foundatom)
+				break;
+		}
+		if(singatom)
+			tmpAtom = singatom;
+		else if(constatom)
+			tmpAtom=constatom;
+		else
+			tmpAtom=otheratom;
+		if(tmpAtom==NULL)
+		{
+			LogDouble wt1 = CNFWeight(CNF);
+			cleanup(CNF);
+		    totalVal = totalVal*wt1;
+			return totalVal;			
+		}
+		bool nonpoly;
+		if(!singleton)
+			nonpoly=true;
+		else
+			nonpoly=false;
+		Atom* atom = LvrMLN::create_new_atom(tmpAtom);
+		vector<bool> isolatedTerms;
+		bool isIsolated = false;
+		if(nonpoly)
+		{
+			if(!atom->isConstant())
+			{
+				if(samplingMode==EINFORMED)
+				{
+					isIsolated = LRulesUtil::computeIsolatedTerms(atom,CNF,isolatedTerms);
+				}
+				if(!isIsolated)
+				{
+					nonpoly=false;
+					/*int maxdomid=0;
+					int maxdomsize=0;
+					for( int ii=0;ii<atom->terms.size();ii++)
+					{
+						if(atom->terms[ii]->domain.size()>maxdomsize)
+						{
+							maxdomid=ii;
+							maxdomsize=atom->terms[ii]->domain.size();
+						}
+					}
+					singletonIndex = maxdomid;
+					*/
+					bool first=true;
+					for( int ii=0;ii<atom->terms.size();ii++)
+					{
+						if(atom->terms[ii]->domain.size()>1)
+						{
+							if(first)
+							{
+								singletonIndex = ii;
+								first=false;
+							}
+							double r = LvRandomGenUtil::Instance()->getNormRand();
+							if(r < 0.5)
+							{
+								singletonIndex = ii;
+								break;
+							}
+						}
+					}
 
+				}
+			}
+		}
+		LProposalDistributionElement* lpe = NULL;
+		if(samplingMode==EINFORMED)
+			lpe = distribution->findElement(atom);
+		if(!nonpoly)
+		{
+			LogDouble probOfSample(1,false);
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int domSize = atom->terms[singletonIndex]->domain.size();
+			if(samplingMode==EINFORMED)
+			{	
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,samplingMode,lpe);
+			}
+			else if(samplingMode==EBINOMIAL)
+			{	
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,EBINOMIAL);
+			}	
+			else
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues);
+			if(LvrQueryUpdater::isInstanceCreated())
+			{
+				LvrQueryUpdater::Instance()->updateQueryValues(atom,sampledValues[0]);
+			}
+			LvrSingletonNormPropagation::propagateNormalizedCNF(CNF,atom,singletonIndex,sampledValues[0]);
+			LogDouble mcnt = doLvApproxPartitionInformed(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		else if(atom->isConstant())
+		{
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int numGroundings = atom->getNumberOfGroundings();
+			bool setTrue=false;
+			if(samplingMode==EINFORMED)
+			{
+				LSamplingAlgs::Instance()->sample(numGroundings,1,sampleWeight,sampledValues,samplingMode,lpe);
+				if(sampledValues[0]==1)
+					setTrue=true;
+			}
+			else
+			{
+				double r = (double)rand()/(double)RAND_MAX;
+				if(r > 0.5)
+				{
+					sampledValues.push_back(1);
+					setTrue=true;
+				}
+				else
+					sampledValues.push_back(0);
+				sampleWeight = LogDouble(2,false);
+			}
+			if(LvrQueryUpdater::isInstanceCreated())
+			{
+				LvrQueryUpdater::Instance()->updateQueryValues(atom,sampledValues[0]);
+			}
+			for(int ii=0;ii<CNF.size();ii++)
+			{
+				for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+				{
+					if(CNF[ii]->atoms[jj]->symbol->id == atom->symbol->id)
+					{
+						if(CNF[ii]->sign[jj] && !setTrue)
+							CNF[ii]->satisfied= true;
+						else if(!CNF[ii]->sign[jj] && setTrue)
+							CNF[ii]->satisfied= true;
+						CNF[ii]->removeAtom(jj);
+						jj--;
+					}
+				}
+				if(CNF[ii]->atoms.size()==0 && !CNF[ii]->satisfied)
+				{
+					removeItem(CNF,ii);
+					ii--;
+				}
+			}
+			LogDouble mcnt = doLvApproxPartitionInformed(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		else if(isIsolated)
+		{	
+			//use Isolated terms rule
+			double binCoeff = 1;
+			LogDouble probOfSample(1,false);
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int isolatedSize=1;
+			int nonisolatedSize = 1;
+			for(unsigned int jj=0;jj<isolatedTerms.size();jj++)
+			{
+				if(isolatedTerms[jj])
+				{
+					isolatedSize *= atom->terms[jj]->domain.size();
+				}
+				else
+				{
+					nonisolatedSize *=  atom->terms[jj]->domain.size();
+				}
+			}
+			LSamplingAlgs::Instance()->sample(isolatedSize,nonisolatedSize,sampleWeight,sampledValues,samplingMode,lpe);
+			if(LvrQueryUpdater::isInstanceCreated())
+			{
+				LvrQueryUpdater::Instance()->updateQueryValues(atom,isolatedTerms,sampledValues);
+			}
+			lvrNormPropagate->propagateNormalizedCNF(CNF,atom,isolatedTerms,sampledValues);
+			LogDouble mcnt = doLvApproxPartitionInformed(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		delete atom;
+	}
+	cleanup(CNF);
+	return totalVal;
+}
+
+
+
+LogDouble LISApproxInference::doLvApproxPartitionInformedRB(vector<WClause*>& CNF)
+{
+	LogDouble totalVal(1,false);
+	if(CNF.size()==0)
+	{
+		return totalVal;
+	}	
+	int powerFactor;
+	bool isDecomposed = decomposeCNF(CNF,powerFactor);
+	if(isDecomposed)
+	{
+		LogDouble mcnt = doLvApproxPartitionInformedRB(CNF);
+		LogDouble val = LogDouble(1,false);
+		LogDouble::LDPower(mcnt,powerFactor,val);
+		totalVal = totalVal*val;
+	}
+	else
+	{
+		int singletonIndex;
+		bool singleton=false;
+		Atom* constatom=NULL;
+		Atom* otheratom=NULL;
+		Atom* singatom=NULL;
+		Atom* tmpAtom = NULL;
+		for(int ii=0;ii<CNF.size();ii++)	
+		{
+		  	bool foundatom=false;
+			for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+			{
+				if(LvrQueryUpdater::Instance()->isNormIdInQuery(CNF[ii]->atoms[jj]->symbol->normParentId))
+					continue;
+				otheratom = CNF[ii]->atoms[jj];
+				singleton = CNF[ii]->atoms[jj]->isSingletonAtom(singletonIndex);
+				if(singleton)
+				{
+					singatom = CNF[ii]->atoms[jj];
+					foundatom=true;
+					break;
+				}
+				else if(CNF[ii]->atoms[jj]->isConstant())
+					constatom = CNF[ii]->atoms[jj];
+			}
+			if(foundatom)
+				break;
+		}
+		if(singatom)
+			tmpAtom = singatom;
+		else if(constatom)
+			tmpAtom=constatom;
+		else
+			tmpAtom=otheratom;
+		if(tmpAtom==NULL)
+		{
+			LogDouble wt1 = CNFWeight(CNF);
+			//exact inference on the rest of the MLN
+			rbestimator->updateRBEstimates(CNF);
+			cleanup(CNF);
+		    totalVal = totalVal*wt1;
+			return totalVal;			
+		}
+		bool nonpoly;
+		if(!singleton)
+			nonpoly=true;
+		else
+			nonpoly=false;
+		Atom* atom = LvrMLN::create_new_atom(tmpAtom);
+		vector<bool> isolatedTerms;
+		bool isIsolated = false;
+		if(nonpoly)
+		{
+			if(!atom->isConstant())
+			{
+				if(samplingMode==EINFORMED)
+				{
+					isIsolated = LRulesUtil::computeIsolatedTerms(atom,CNF,isolatedTerms);
+				}
+				if(!isIsolated)
+				{
+					nonpoly=false;
+					/*int maxdomid=0;
+					int maxdomsize=0;
+					for( int ii=0;ii<atom->terms.size();ii++)
+					{
+						if(atom->terms[ii]->domain.size()>maxdomsize)
+						{
+							maxdomid=ii;
+							maxdomsize=atom->terms[ii]->domain.size();
+						}
+					}
+					singletonIndex = maxdomid;
+					*/
+					bool first=true;
+					for( int ii=0;ii<atom->terms.size();ii++)
+					{
+						if(atom->terms[ii]->domain.size()>1)
+						{
+							if(first)
+							{
+								singletonIndex = ii;
+								first=false;
+							}
+							double r = LvRandomGenUtil::Instance()->getNormRand();
+							if(r < 0.5)
+							{
+								singletonIndex = ii;
+								break;
+							}
+						}
+					}
+
+				}
+			}
+		}
+		LProposalDistributionElement* lpe = NULL;
+		if(samplingMode==EINFORMED)
+			lpe = distribution->findElement(atom);
+		if(!nonpoly)
+		{
+			LogDouble probOfSample(1,false);
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int domSize = atom->terms[singletonIndex]->domain.size();
+			if(samplingMode==EINFORMED)
+			{	
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,samplingMode,lpe);
+			}
+			else if(samplingMode==EBINOMIAL)
+			{	
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,EBINOMIAL);
+			}	
+			else
+				LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues);
+			LvrSingletonNormPropagation::propagateNormalizedCNF(CNF,atom,singletonIndex,sampledValues[0]);
+			LogDouble mcnt = doLvApproxPartitionInformedRB(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		else if(atom->isConstant())
+		{
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int numGroundings = atom->getNumberOfGroundings();
+			bool setTrue=false;
+			if(samplingMode==EINFORMED)
+			{
+				LSamplingAlgs::Instance()->sample(numGroundings,1,sampleWeight,sampledValues,samplingMode,lpe);
+				if(sampledValues[0]==1)
+					setTrue=true;
+			}
+			else
+			{
+				double r = (double)rand()/(double)RAND_MAX;
+				if(r > 0.5)
+				{
+					sampledValues.push_back(1);
+					setTrue=true;
+				}
+				else
+					sampledValues.push_back(0);
+				sampleWeight = LogDouble(2,false);
+			}
+			for(int ii=0;ii<CNF.size();ii++)
+			{
+				for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+				{
+					if(CNF[ii]->atoms[jj]->symbol->id == atom->symbol->id)
+					{
+						if(CNF[ii]->sign[jj] && !setTrue)
+							CNF[ii]->satisfied= true;
+						else if(!CNF[ii]->sign[jj] && setTrue)
+							CNF[ii]->satisfied= true;
+						CNF[ii]->removeAtom(jj);
+						jj--;
+					}
+				}
+				if(CNF[ii]->atoms.size()==0 && !CNF[ii]->satisfied)
+				{
+					removeItem(CNF,ii);
+					ii--;
+				}
+			}
+			LogDouble mcnt = doLvApproxPartitionInformedRB(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		else if(isIsolated)
+		{	
+			//use Isolated terms rule
+			double binCoeff = 1;
+			LogDouble probOfSample(1,false);
+			LogDouble sampleWeight(1,false);
+			vector<int> sampledValues;
+			int isolatedSize=1;
+			int nonisolatedSize = 1;
+			for(unsigned int jj=0;jj<isolatedTerms.size();jj++)
+			{
+				if(isolatedTerms[jj])
+				{
+					isolatedSize *= atom->terms[jj]->domain.size();
+				}
+				else
+				{
+					nonisolatedSize *=  atom->terms[jj]->domain.size();
+				}
+			}
+			LSamplingAlgs::Instance()->sample(isolatedSize,nonisolatedSize,sampleWeight,sampledValues,samplingMode,lpe);
+			lvrNormPropagate->propagateNormalizedCNF(CNF,atom,isolatedTerms,sampledValues);
+			LogDouble mcnt = doLvApproxPartitionInformedRB(CNF);
+			totalVal *= sampleWeight*mcnt;
+		}
+		delete atom;
+	}
+	cleanup(CNF);
+	return totalVal;
+}
+
+
+/*
 LogDouble LISApproxInference::doLvApproxPartitionInformed(vector<WClause*>& CNF1)
 {
 	LogDouble totalVal(1,false);
@@ -297,7 +738,7 @@ LogDouble LISApproxInference::doLvApproxPartitionInformed(vector<WClause*>& CNF1
 			LogDouble sampleWeight(1,false);
 			vector<int> sampledValues;
 			int domSize = atom->terms[singletonIndex]->domain.size();
-			LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,samplingMode,lpe);
+			LSamplingAlgs::Instance()->sample(domSize,1,sampleWeight,sampledValues,EINFORMED,lpe);
 			if(LvrQueryUpdater::isInstanceCreated())
 			{
 				LvrQueryUpdater::Instance()->updateQueryValues(atom,sampledValues[0]);
@@ -340,7 +781,7 @@ LogDouble LISApproxInference::doLvApproxPartitionInformed(vector<WClause*>& CNF1
 			else
 			{
 				int numGroundings = atom->getNumberOfGroundings();
-				LSamplingAlgs::Instance()->sample(numGroundings,1,sampleWeight,sampledValues,samplingMode,lpe);
+				LSamplingAlgs::Instance()->sample(numGroundings,1,sampleWeight,sampledValues,EINFORMED,lpe);
 				if(LvrQueryUpdater::isInstanceCreated())
 				{
 					LvrQueryUpdater::Instance()->updateQueryValues(atom,sampledValues[0]);
@@ -351,13 +792,14 @@ LogDouble LISApproxInference::doLvApproxPartitionInformed(vector<WClause*>& CNF1
 			LogDouble mcnt = doLvApproxPartitionInformed(CNF);
 			totalVal *= sampleWeight*mcnt;
 		}
-		
+
 		delete atom;
 		cleanup(CNF);
 	}
 	return totalVal;
 }
-
+*/
+/*
 LogDouble LISApproxInference::doLvApproxPartitionBinomial(vector<WClause*>& CNF1)
 {
 	LogDouble totalVal(1,false);
@@ -438,6 +880,88 @@ LogDouble LISApproxInference::doLvApproxPartitionBinomial(vector<WClause*>& CNF1
 	}
 	return totalVal;
 }
+*/
+/*
+LogDouble LISApproxInference::estimatePartitionFunction(LvrParams* params,LProposalDistribution* distribution)
+{
+	cout<<"Lifted Importance Sampling for estimating Z..."<<endl;
+	time_t start;
+	time(&start);
+	cout<<start<<endl;
+	cout<<"Time ="<<ctime(&start)<<endl;
+	LogDouble ZApprox;
+	int iterations = 0;
+	if(distribution)
+		setProposalDistribution(distribution);
+	setSamplingMode(params->samplingMode);
+	if(params->learningRate <=0 )
+		params->learningRate = LEARNINGRATE;
+	if(params->proposalUpdateInterval <= 0)
+		params->proposalUpdateInterval = PROPOSALUPDATEINTERVAL;
+	time_t autotime;
+	time(&autotime);
+	int itime=0;
+	LogDouble totalZ;
+	while(1)
+	{
+		//make a copy of normalized clauses
+		vector<WClause*> clauses;
+		LvrMLN::copyAllClauses(mln.clauses,clauses);
+		LogDouble currZ;
+		currZ = doLvApproxPartitionInformed(clauses);
+		totalZ = totalZ + currZ;
+		iterations++;
+		if(params->samplingMode == EINFORMED)
+		{
+			if(iterations % params->proposalUpdateInterval == 0)
+				distribution->updateDistributions(params->learningRate);
+		}
+		//take average
+		ZApprox = totalZ / LogDouble(iterations,false);
+		if(params->autotest)
+		{
+			time_t curr;
+			time(&curr);
+			int seconds = difftime(curr,autotime);			
+			if(seconds > params->printinterval)
+			{
+				time(&autotime);
+				string outname(params->fileprefix);
+				itime += params->iprintinterval;
+				stringstream st;
+				st<<itime;
+				outname.append(st.str());
+				outname.append(".dat");
+				ofstream out(outname.c_str());
+				out<<iterations<<" "<<ZApprox.value<<endl;
+				out.close();
+				if(itime >= (int)params->endtime)
+					return ZApprox;
+			}
+		}
+		else
+		{
+			time_t curr;
+			time(&curr);
+			int seconds = difftime(curr,start);
+			if(iterations%PRINTRESULTSINTERVAL == 0 ||
+					seconds > params->maxSeconds || iterations >= params->maxSteps)
+			{
+				cout<<"iteration="<<iterations<<", currZ : ";
+				currZ.printValue();
+				cout<<", ZApprox : ";
+				ZApprox.printValue();
+				cout<<endl;
+				if(seconds > params->maxSeconds || iterations >= params->maxSteps)
+				{
+					return ZApprox;
+				}
+			}
+		}
+	}
+}
+*/
+
 
 LogDouble LISApproxInference::estimatePartitionFunction(LvrParams* params,LProposalDistribution* distribution)
 {
@@ -454,49 +978,111 @@ LogDouble LISApproxInference::estimatePartitionFunction(LvrParams* params,LPropo
 		params->learningRate = LEARNINGRATE;
 	if(params->proposalUpdateInterval <= 0)
 		params->proposalUpdateInterval = PROPOSALUPDATEINTERVAL;
-
+	time_t autotime;
+	int itime=0;
+	LogDouble totalZ;
+	int samplestothrow=25;
+	LogDouble rejectionmax;
+	int initialiters=0;
+	vector<int> rejarr;
 	while(1)
 	{
 		//make a copy of normalized clauses
 		vector<WClause*> clauses;
 		LvrMLN::copyAllClauses(mln.clauses,clauses);
 		LogDouble currZ;
-		//currZ = weightedModelCountApprox(clauses);
-		if(params->samplingMode == EINFORMED)
-			currZ = doLvApproxPartitionInformed(clauses);
-		else if(params->samplingMode == EINFORMEDV1)
-			currZ = doLvApproxPartitionInformedV1(clauses);
-		else
-			currZ = doLvApproxPartitionBinomial(clauses);
-		//update approximation
-		ZApprox = ZApprox*LogDouble(iterations,false) + currZ;
+		currZ = doLvApproxPartitionInformed(clauses);
+		initialiters++;
+		if(initialiters <= samplestothrow)
+		{
+			rejarr.push_back((int)currZ.value);
+			if(initialiters==samplestothrow)
+			{
+				sort(rejarr.begin(),rejarr.end());
+				int val = rejarr[rejarr.size()/2];
+				rejectionmax = LogDouble(val,true); 
+			}
+			continue;
+		}
+		//accept/reject sample
+		LogDouble p1(1,false);
+		if(!rejectionmax.is_zero)
+		{
+			p1 =  currZ/rejectionmax;
+			double r = LvRandomGenUtil::Instance()->getNormRand();
+			LogDouble p2(r,false);
+			if(p2 > p1)
+			{
+				//reject sample
+				continue;
+			}
+		}
+		if(p1 > LogDouble(1,false))
+			p1 = LogDouble(1,false);
+		if(iterations==0)
+			time(&autotime);
 		iterations++;
-		if(params->samplingMode == EINFORMED || params->samplingMode == EINFORMEDV1)
+		currZ = currZ/p1;
+		totalZ = totalZ + currZ;
+		iterations++;
+		if(params->samplingMode == EINFORMED)
 		{
 			if(iterations % params->proposalUpdateInterval == 0)
 				distribution->updateDistributions(params->learningRate);
 		}
 		//take average
-		ZApprox = ZApprox / LogDouble(iterations,false);
-		time_t curr;
-		time(&curr);
-		int seconds = difftime(curr,start);
-		if(iterations%PRINTRESULTSINTERVAL == 0 ||
-				seconds > params->maxSeconds || iterations >= params->maxSteps)
+		ZApprox = totalZ/LogDouble(iterations,false);
+		if(params->autotest)
 		{
-		cout<<"iteration="<<iterations<<", currZ : ";
-		currZ.printValue();
-		cout<<", ZApprox : ";
-		ZApprox.printValue();
-		cout<<endl;
-		if(seconds > params->maxSeconds || iterations >= params->maxSteps)
-			return ZApprox;
+			time_t curr;
+			time(&curr);
+			int seconds = difftime(curr,autotime);			
+			if(seconds > params->printinterval)
+			{
+				time(&autotime);
+				string outname(params->fileprefix);
+				itime += params->iprintinterval;
+				stringstream st;
+				st<<itime;
+				outname.append(st.str());
+				outname.append(".dat");
+				ofstream out(outname.c_str());
+				out<<iterations<<" "<<ZApprox.value<<endl;
+				out.close();
+				if(itime >= (int)params->endtime)
+					return ZApprox;
+			}
+		}
+		else
+		{
+			time_t curr;
+			time(&curr);
+			int seconds = difftime(curr,start);
+			if(iterations%PRINTRESULTSINTERVAL == 0 ||
+					seconds > params->maxSeconds || iterations >= params->maxSteps)
+			{
+				cout<<"iteration="<<iterations<<", currZ : ";
+				currZ.printValue();
+				cout<<", ZApprox : ";
+				ZApprox.printValue();
+				cout<<endl;
+				if(seconds > params->maxSeconds || iterations >= params->maxSteps)
+				{
+					return ZApprox;
+				}
+			}
 		}
 	}
 }
 
 void LISApproxInference::estimateApproxMarginals(LvrParams* params,LProposalDistribution* distribution)
 {
+	if(params->lisRB)
+	{
+		rbestimator = new LvgRBEstimator(mln);
+		cout<<"Running Rao Blackwellized IS"<<endl;
+	}
+	
 	setProposalDistribution(distribution);
 	cout<<"Estimating Marginals using Lifted Importance Sampling..."<<endl;
 	time_t start;
@@ -511,28 +1097,69 @@ void LISApproxInference::estimateApproxMarginals(LvrParams* params,LProposalDist
 		params->learningRate = LEARNINGRATE;
 	if(params->proposalUpdateInterval <= 0)
 		params->proposalUpdateInterval = PROPOSALUPDATEINTERVAL;
+	int samplestothrow=25;
+	LogDouble rejectionmax;
+	int initialiters=0;
+	vector<int> rejarr;
 	while(1)
 	{
 		//make a copy of normalized clauses
 		vector<WClause*> clauses;
 		LvrMLN::copyAllClauses(mln.clauses,clauses);
 		LogDouble currWt;
-		if(params->samplingMode == EINFORMED)
-			currWt = doLvApproxPartitionInformed(clauses);
-		else if(params->samplingMode == EINFORMEDV1)
-			currWt = doLvApproxPartitionInformedV1(clauses);
+		if(params->lisRB)
+			currWt = doLvApproxPartitionInformedRB(clauses);
 		else
-			currWt = doLvApproxPartitionBinomial(clauses);
-		LvrQueryUpdater::Instance()->updateDontCare();
-		clauses.clear();
-		//update the weights for query
-		LvrQueryUpdater::Instance()->updateAllImportanceWeights(currWt);
-
+			currWt = doLvApproxPartitionInformed(clauses);
+		initialiters++;
+		if(initialiters <= samplestothrow)
+		{
+			LvrQueryUpdater::Instance()->resetallupdateflags();
+			rejarr.push_back((int)currWt.value);
+			if(initialiters==samplestothrow)
+			{
+				sort(rejarr.begin(),rejarr.end());
+				int val = rejarr[rejarr.size()/2];
+				rejectionmax = LogDouble(val,true); 
+			}
+			continue;
+		}
+		//accept/reject sample
+		LogDouble p1(1,false);
+		if(!rejectionmax.is_zero)
+		{
+			p1 =  currWt/rejectionmax;
+			//cout<<currWt.value<<" "<<p1<<" "<<rejectionmax.value<<endl;
+			double r = LvRandomGenUtil::Instance()->getNormRand();
+			LogDouble p2(r,false);
+			if(p2 > p1)
+			{
+				//reject sample
+				//cout<<"reject"<<endl;
+				continue;
+			}
+		}
+		if(p1 > LogDouble(1,false))
+			p1 = LogDouble(1,false);
+		//cout<<"accept"<<endl;
+		iterations++;
+		currWt = currWt/p1;
 		//update the cumulative weight
 		totalWeight += currWt;
+		//totalWeight += currWt;
 		//update approximation
-		iterations++;
-		if(params->samplingMode == EINFORMED || params->samplingMode == EINFORMEDV1)
+		if(params->lisRB)
+		{
+			LvrQueryUpdater::Instance()->updateGibbsDontCareRB();
+			LvrQueryUpdater::Instance()->updateAllImportanceWeightsRB(currWt);
+		}
+		else
+		{
+			LvrQueryUpdater::Instance()->updateDontCare();
+			LvrQueryUpdater::Instance()->updateAllImportanceWeights(currWt);
+		}
+		
+		if(params->samplingMode == EINFORMED)
 		{
 			if(iterations % params->proposalUpdateInterval == 0)
 			{
@@ -559,7 +1186,7 @@ void LISApproxInference::estimateApproxMarginals(LvrParams* params,LProposalDist
 	}
 }
 
-LISApproxInference::LISApproxInference(LvrMLN& mln_): mln(mln_)
+LISApproxInference::LISApproxInference(LvrMLN& mln_): mln(mln_),rbestimator(NULL),raoblackwelize(false)
 {
 	decomposer = new LDecomposer(mln);
 	heuristics = new LHeuristics(*decomposer,mln);

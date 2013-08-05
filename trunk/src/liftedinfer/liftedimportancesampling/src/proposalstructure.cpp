@@ -115,6 +115,7 @@
 	int LProposalTable::getTableSize(int index)
 	{
 		return distribution[index].size();
+
 	}
 
 	LogDouble LProposalTable::getDistributionValue(int index,int numTrue)
@@ -179,7 +180,7 @@
 		}
 		
 	}
-
+	/*
 	void LProposalDistributionElement::sample(LogDouble& prob,vector<int>& sampledValues, int domainSize)
 	{
 		//print();
@@ -262,6 +263,114 @@
 			}
 			probToUpdate *= proposalTables[i]->sampledProbability;
 			totalValue += proposalTables[i]->sampledValue;
+		}
+		
+		this->probability = probToUpdate;
+		this->nTrueValues = totalValue;
+	}
+	*/
+
+	void LProposalDistributionElement::sample(LogDouble& prob,vector<int>& sampledValues, int domainSize)
+	{
+		//print();
+		prob = LogDouble(1,false);
+		sampledValues.clear();
+		sampledValues.resize(proposalTables.size());
+		
+		int index = 0;
+		//from the current parent's value get the index ofdistribution to sample
+		if(parents.size()==0)
+		{
+			index=0;
+		}
+		else
+		{
+			vector<int> parentValues;
+			vector<int> parentSizes;
+			for(int i=0;i<parents.size();i++)
+			{
+				parentValues.push_back(parents[i]->nTrueValues);
+				parentSizes.push_back(parents[i]->atom->getNumberOfGroundings());
+			}
+			
+			//decode
+			index = parentValues[parentValues.size()-1];
+			for(int j=parentSizes.size()-2;j>=0;j--)
+			{
+				for(unsigned int k=j+1;k<parentSizes.size();k++)
+					index += parentValues[j]*parentSizes[k];
+			}
+			
+		}
+		if(index < 0)
+			index=0;
+		int totalValue = 0;
+		LogDouble probToUpdate(1,false);
+		for(unsigned int i=0;i<proposalTables.size();i++)
+		{
+			//check for mismatch
+			double tableSize = proposalTables[i]->getTableSize(index);
+			if(domainSize+1 != tableSize && domainSize > 0)
+			{
+				if(domainSize+1 < tableSize)
+				{
+					
+					//proposal stored for a variant of the atom
+					//need to dynamically create a modified proposal and sample from it
+					int difference = tableSize - (domainSize + 1);
+					vector<LogDouble> currProposal;
+					vector<LogDouble> prevProposal;
+					double N = tableSize;
+					for(unsigned int jj=0;jj<proposalTables[i]->distribution[index].size();jj++)
+					{
+						prevProposal.push_back(proposalTables[i]->distribution[index][jj]);
+					}
+					for(int t=0;t<difference;t++)
+					{
+						N = prevProposal.size();
+						currProposal.clear();
+						currProposal.resize(prevProposal.size()-1);
+						for(unsigned int p=0;p<currProposal.size();p++)
+						{
+							LogDouble c1((N-(double)p)/N,false);
+							LogDouble c2(((double)p+1.0)/N,false);
+							currProposal[p] = c1*prevProposal[p]+c2*prevProposal[p+1];
+						}
+						prevProposal.clear();
+						for(unsigned int p=0;p<currProposal.size();p++)
+						{
+							prevProposal.push_back(currProposal[p]);
+						}
+					}
+					//sample from new distribution
+					vector<LogDouble> cdf(currProposal.size());
+					cdf[0] = currProposal[0];
+					for(unsigned int ii=1;ii<currProposal.size()-1;ii++)
+					{
+						cdf[ii] = cdf[ii-1]+currProposal[ii];
+					}
+					cdf[cdf.size()-1] = LogDouble(1,false);
+					double u = LvRandomGenUtil::Instance()->getNormRand();
+					LogDouble lu(u,false);
+					int nTrues = lower_bound(cdf.begin(),cdf.end(),lu) - cdf.begin();
+					totalValue += nTrues;
+					probToUpdate *= currProposal[nTrues];
+					sampledValues[i] = nTrues;
+					prob *= currProposal[nTrues];
+					//update the appropriate counter
+					proposalTables[i]->adaptiveMLECounter[index].at(nTrues)++;
+					proposalTables[i]->totalSamplesCollected[index]++;
+				}
+			}
+			else
+			{
+				//sample from original proposal distribution
+				proposalTables[i]->sampleDistribution(index);
+				prob *= proposalTables[i]->sampledProbability;
+				sampledValues[i] = proposalTables[i]->sampledValue;
+				probToUpdate *= proposalTables[i]->sampledProbability;
+				totalValue += proposalTables[i]->sampledValue;
+			}
 		}
 		
 		this->probability = probToUpdate;

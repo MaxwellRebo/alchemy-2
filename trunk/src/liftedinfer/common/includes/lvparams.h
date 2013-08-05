@@ -1,7 +1,7 @@
 #ifndef __LVPARAMS
 #define __LVPARAMS
 #include "mcmcparams.h"
-
+#include <time.h>
 //Sampling modes for importance sampling
 enum ESamplingMode
 {
@@ -50,6 +50,14 @@ struct LvrParams:public MCMCParams
 	int proposalUpdateInterval;
 	int ptpCacheSize;
 	double baselineCostMultiplicativeFactor;
+	bool gibbsRB;
+	bool lisRB;
+	//autotesting env vars
+	int autotest;
+	clock_t printinterval;
+	clock_t endtime;
+	int iprintinterval;
+	string fileprefix;
 };
 
 #endif

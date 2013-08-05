@@ -244,7 +244,7 @@ int WClause::getNumberOfGroundedClauses()
 void WClause::removeAtom(int index)
 {
 	//terms are shared in the same clause, check if the atom has shared terms
-	for(unsigned int i=0;i<atoms[index]->terms.size();i++)
+	for(int i=0;i<atoms[index]->terms.size();i++)
 	{
 		bool shared = false;
 		for(unsigned int j=0;j<atoms.size();j++)

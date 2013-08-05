@@ -2,6 +2,7 @@
 #include "randomgenutil.h"
 #include <assert.h>
 #include "fileutils.h"
+#include "mathutils.h"
 LvrQueryUpdater* LvrQueryUpdater::m_pInstance = NULL;
 
 LvrQueryUpdater* LvrQueryUpdater::Instance()
@@ -33,10 +34,13 @@ LvrQueryUpdater::LvrQueryUpdater(vector<vector<int> > queryIntRep,vector<string>
 	queryHashTemplate = new LvrAtomHashTemplate<string>();
 	currentSampledValue = new LvrAtomHashTemplate<int>();
 	cumulativeWeight = new LvrAtomHashTemplate<LogDouble*>();
+	rbestimates = new LvrAtomHashTemplate<LogDouble*>();
 	for(unsigned i=0;i<queryIntRep.size();i++)
 	{
 		LogDouble* ld = new LogDouble(0,false);
 		cumulativeWeight->insert(queryIntRep[i],ld);
+		LogDouble* ld1 = new LogDouble(0,false);
+		rbestimates->insert(queryIntRep[i],ld1);
 		lvrAtomHashTemplate->insert(queryIntRep[i],0);
 		lvrAtomHashUpdateFlags->insert(queryIntRep[i],false);
 		currentSampledValue->insert(queryIntRep[i],0);
@@ -51,6 +55,7 @@ LvrQueryUpdater::LvrQueryUpdater(vector<vector<int> > queryIntRep,vector<string>
 			lvrAtomHashTemplate->deleteEntry((*evidenceIntRep)[i]);
 			lvrAtomHashUpdateFlags->deleteEntry((*evidenceIntRep)[i]);
 			currentSampledValue->deleteEntry((*evidenceIntRep)[i]);
+			rbestimates->deleteEntry((*evidenceIntRep)[i]);
 		}
 	}
 	currentProbabilities.resize(lvrAtomHashTemplate->size());
@@ -366,7 +371,175 @@ void LvrQueryUpdater::updateQueryValuesLVGibbs(Atom* atom,int sampledTrueVal)
 		}
 	}
 }
+/*
+//Functions to support Rao-Blackwell estimation
+void LvrQueryUpdater::updateQueryValuesLVGibbsRB(Atom* atom,LogDouble prob,int sampledvalue)
+{
+	if(!isNormIdInQuery(atom->symbol->normParentId))
+		return;
+	//ground the atom, if not grounded
+	if(atom->isConstant())
+	{
+		vector<int> intRep(atom->terms.size()+1);
+		intRep[0] = atom->symbol->normParentId;
+		for(unsigned int i=0;i<atom->terms.size();i++)
+		intRep[i+1] = atom->terms[i]->domain[0];
+		bool value;
+		bool found = lvrAtomHashUpdateFlags->getValue(intRep,value);
+		if(!found)
+			return;
+		if(!value)
+		{
+			rbestimates->incrementValue(atom,&prob);
+			//currentSampledValue->update(atom,sampledvalue);
+			lvrAtomHashUpdateFlags->update(atom,true);
+		}
+	}
+	else
+	{
+		vector<vector<int> > permutedList;
+		LvrPermutations::permuteTerms(atom->terms,permutedList);
+		set<int> indexes;
+		while(indexes.size()!=sampledvalue)
+		{
+			int ind = LvRandomGenUtil::Instance()->getRandomPosition(permutedList.size());
+			indexes.insert(ind);
+		}
+		for(unsigned int i=0;i<permutedList.size();i++)
+		{
+			vector<int> intRep(permutedList[i].size()+1);
+			intRep[0] = atom->symbol->normParentId;
+			for(unsigned int jj=0;jj<permutedList[i].size();jj++)
+				intRep[jj+1] = permutedList[i].at(jj);
+			bool value;
+			bool found = lvrAtomHashUpdateFlags->getValue(intRep,value);
+			if(!found)
+				continue;
+			if(!value)
+			{
+				//bool assignment = false;
+				int assignment = 0;
+				if(indexes.find(i)!=indexes.end())
+				{
+					rbestimates->incrementValue(atom,&prob);
+					//assignment = true;
+					assignment = 1;
+				}
+				else
+				{
+					LogDouble neg = LogDouble(1.0-exp(prob.value),false);
+					rbestimates->incrementValue(atom,&neg);
+				}
+				///currentSampledValue->update(intRep,assignment);
+				//currentSampledValue->update(intRep,assignment);
+				lvrAtomHashUpdateFlags->update(intRep,true);
+			}
+		}
+	}
+}
+*/
+void LvrQueryUpdater::updateQueryValuesLVGibbsRB(Atom* atom,vector<LogDouble> probs)
+{
+	if(!isNormIdInQuery(atom->symbol->normParentId))
+		return;
+	if(probs.size()!=atom->getNumberOfGroundings()+1)
+	{
+		cout<<"Error!!"<<endl;
+		return;
+	}
+	//ground the atom, if not grounded
+	if(atom->isConstant())
+	{
+		vector<int> intRep(atom->terms.size()+1);
+		intRep[0] = atom->symbol->normParentId;
+		for(unsigned int i=0;i<atom->terms.size();i++)
+		intRep[i+1] = atom->terms[i]->domain[0];
+		bool value;
+		bool found = lvrAtomHashUpdateFlags->getValue(intRep,value);
+		if(!found)
+			return;
+		if(!value)
+		{
+			rbestimates->incrementValue(atom,&probs[1]);
+			//currentSampledValue->update(atom,sampledvalue);
+			lvrAtomHashUpdateFlags->update(atom,true);
+		}
+		//cout<<probs[0]<<" "<<probs[1]<<endl;
+	}
+	else
+	{
+		//compute the grounded probability using the lifted probs
+		LogDouble prob;
+		for(unsigned int i=1;i<probs.size();i++)
+		{
+			//prob = prob + probs[i]/LMathUtils::Instance()->getCoeff(atom->getNumberOfGroundings(),i);
+			LogDouble coef = LogDouble(i,false)/LogDouble(atom->getNumberOfGroundings(),false);
+			//LogDouble coef(1,false);
+			prob = prob + probs[i]*coef;
+		}
+		//cout<<prob<<endl;
+		vector<vector<int> > permutedList;
+		LvrPermutations::permuteTerms(atom->terms,permutedList);
+		for(unsigned int i=0;i<permutedList.size();i++)
+		{
+			vector<int> intRep(permutedList[i].size()+1);
+			intRep[0] = atom->symbol->normParentId;
+			for(unsigned int jj=0;jj<permutedList[i].size();jj++)
+				intRep[jj+1] = permutedList[i].at(jj);
+			bool value;
+			bool found = lvrAtomHashUpdateFlags->getValue(intRep,value);
+			if(!found)
+				continue;
+			if(!value)
+			{
+				rbestimates->incrementValue(intRep,&prob);
+				lvrAtomHashUpdateFlags->update(intRep,true);
+			}
+		}
+	}
+}
 
+void LvrQueryUpdater::updateGibbsDontCareRB()
+{
+	vector<bool> values;
+	vector<int> keys;
+	lvrAtomHashUpdateFlags->getAllKeyValuePairs(keys,values);
+	for(unsigned int i=0;i<values.size();i++)
+	{
+		if(!values[i])
+		{
+			rbestimates->incrementValue(keys[i],&(LogDouble(0.5,false)));
+		}
+		lvrAtomHashUpdateFlags->setValue(keys[i],false);
+	}
+}
+void LvrQueryUpdater::normalizeRB(int iterations)
+{
+	vector<LogDouble*> rbest = rbestimates->getAllData();
+	for(unsigned int i=0;i<rbest.size();i++)
+	{
+		LogDouble tmp = *(rbest[i])/LogDouble(iterations,false);
+		currentProbabilities[i] = exp(tmp.value);
+	}
+}
+void LvrQueryUpdater::writeGibbsRBToFile(int iterations)
+{
+	normalizeRB(iterations);
+	vector<string> queryStrings = queryHashTemplate->getAllData();
+	LFileUtils::Instance()->updateFile(currentProbabilities,queryStrings);
+}
+
+
+void LvrQueryUpdater::resetallupdateflags()
+{
+	vector<bool> values;
+	vector<int> keys;
+	lvrAtomHashUpdateFlags->getAllKeyValuePairs(keys,values);
+	for(unsigned int i=0;i<keys.size();i++)
+	{
+		lvrAtomHashUpdateFlags->setValue(keys[i],false);
+	}
+}
 //called to sample query atoms that were set as don't care in iteration
 void LvrQueryUpdater::updateDontCare()
 {
@@ -425,6 +598,67 @@ void LvrQueryUpdater::updateAllImportanceWeights(LogDouble currentIterWeight)
 			(*values[i]) = (*values[i]) + currentIterWeight;
 		else if(sampleValue == -1)
 			(*values[i]) = (*values[i]) + currentIterWeight/LogDouble(2,false);
+	}
+}
+
+
+void LvrQueryUpdater::updateISRBEstimates(Atom* atom,vector<LogDouble> probs)
+{
+	if(!isNormIdInQuery(atom->symbol->normParentId))
+		return;
+	Atom* origDomainAtom = NULL;
+	vector<bool> changedDomain(atom->terms.size());
+	vector<LvrTerm*> termsToPermute;
+	//check if this atom represents a decomposed atom
+	for(unsigned int i=0;i<atom->terms.size();i++)
+	{
+		if(atom->terms[i]->origDomain.size() > atom->terms[i]->domain.size())
+		{
+			//decomposed atom
+			if(!origDomainAtom)
+				origDomainAtom = LvrMLN::create_new_atom(atom);
+			origDomainAtom->terms[i]->domain.clear();
+			origDomainAtom->terms[i]->domain = origDomainAtom->terms[i]->origDomain;
+			termsToPermute.push_back(origDomainAtom->terms[i]);
+			changedDomain[i] = true;
+		}
+	}
+	if(origDomainAtom==NULL)
+	{
+		updateQueryValuesLVGibbsRB(atom,probs);
+		return;
+	}
+	vector<vector<int> > permutedList;
+	LvrPermutations::permuteTerms(termsToPermute,permutedList);
+	for(unsigned int i=0;i<permutedList.size();i++)
+	{
+		int iter=0;
+		for(unsigned int j=0;j<changedDomain.size();j++)
+		{
+			if(!changedDomain[j])
+				continue;
+			origDomainAtom->terms[j]->domain.clear();
+			origDomainAtom->terms[j]->domain.push_back(permutedList[i].at(iter++));
+		}
+		updateQueryValuesLVGibbsRB(origDomainAtom,probs);
+	}
+	delete origDomainAtom;
+}
+
+void LvrQueryUpdater::updateAllImportanceWeightsRB(LogDouble currentIterWeight)
+{
+	vector<LogDouble*> values;
+	vector<int> keys;
+	cumulativeWeight->getAllKeyValuePairs(keys,values);
+	for(unsigned int i=0;i<keys.size();i++)
+	{
+		//bool sampleValue;
+		LogDouble* sampleValue;
+		bool found = rbestimates->getValue(keys[i],sampleValue);
+		if(!found)
+			continue;
+		(*values[i]) = (*values[i]) + (*sampleValue)*currentIterWeight;
+		(*sampleValue) = LogDouble(0,false);
 	}
 }
 

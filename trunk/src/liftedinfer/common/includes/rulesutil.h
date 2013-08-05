@@ -30,6 +30,12 @@ struct LRulesUtil
 
 		for(unsigned int i=0;i<clauses.size();i++)
 		{
+			if(clauses[i]->isSelfJoinedOnAtom(atom))
+			{
+				for(unsigned int ii=0;ii<isolatedTerms.size();ii++)
+					isolatedTerms[ii]=false;
+				return false;
+			}
 			for(unsigned int j=0;j<clauses[i]->atoms.size();j++)
 			{
 				if(clauses[i]->atoms[j]->symbol->id == atom->symbol->id)

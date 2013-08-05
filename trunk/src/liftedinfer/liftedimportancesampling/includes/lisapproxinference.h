@@ -18,6 +18,7 @@ using namespace std;
 #include "lvrnormpropagation.h"
 #include "lvrsingletonnormpropagation.h"
 #include "lvparams.h"
+#include "lvgrbestimator.h"
 
 struct LISApproxInference
 {
@@ -35,6 +36,8 @@ struct LISApproxInference
 		delete decomposer;
 		delete heuristics;
 		delete lvrNormPropagate;
+		if(rbestimator)
+			delete rbestimator;
 	}
 	LogDouble doLvApproxPartitionInformed(vector<WClause*>& CNF);
 	LogDouble doLvApproxPartitionInformedV1(vector<WClause*>& CNF);
@@ -46,6 +49,7 @@ struct LISApproxInference
 		return heuristics->getAtomToSplit(clauses);
 	}
 	bool decomposeCNF(vector<WClause*>& CNF,int& powerFactor);
+	LogDouble doLvApproxPartitionInformedRB(vector<WClause*>& CNF);
 
 private:
 	LvrMLN& mln;
@@ -53,9 +57,11 @@ private:
 	LHeuristics* heuristics;	
 	LvrNormPropagation* lvrNormPropagate;
 	ESamplingMode samplingMode;
+	
+	LvgRBEstimator* rbestimator;
 	//not owned
 	LProposalDistribution* distribution;
-
+	bool raoblackwelize;
 	void seperateDisjointCNF(vector<WClause*> CNF, vector<vector<WClause*> >& disjointCNFList);
 	LogDouble CNFWeight(vector<WClause*>& CNF);
 };
