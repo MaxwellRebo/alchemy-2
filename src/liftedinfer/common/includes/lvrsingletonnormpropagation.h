@@ -8,7 +8,7 @@ struct LvrSingletonNormPropagation
 
 	static void propagateNormalizedCNF(vector<WClause*>& CNF, Atom* atomToSplit,int singletonIndex, int numTrue)
 	{
-		int numFalse = atomToSplit->getNumberOfGroundings() - numTrue;
+		int numFalse = atomToSplit->terms[singletonIndex]->domain.size() - numTrue;
 		if(numFalse==0)
 		{
 			//simply remove all the matching predicates and set to satisfied

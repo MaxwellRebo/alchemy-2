@@ -694,8 +694,7 @@ void LVRCluster::doReduceCNFByEvidence(int elementIndex,vector<WClause*>& clause
 		int nLVFalse;
 		getNumTrueAssignments(elementIndex,clauses[i]->atoms[atomInd],nLVTrue,nLVFalse);
 		if(nLVTrue!=0 && nLVFalse!=0)
-		{
-			clauses[i]->weight = clauses[i]->weight*LogDouble(nLVTrue,false);
+		{	
 			bool nsat = false;
 			if(!clauses[i]->sign[atomInd])
 				clauses[i]->satisfied = true;
@@ -703,16 +702,16 @@ void LVRCluster::doReduceCNFByEvidence(int elementIndex,vector<WClause*>& clause
 				nsat = true;
 			clauses[i]->removeAtom(atomInd);
 			WClause* nClause = LvrMLN::create_new_clause(clauses[i]);
+			clauses[i]->weight = clauses[i]->weight*LogDouble(nLVTrue,false);
 			nClause->weight = nClause->weight*LogDouble(nLVFalse,false);
 			nClause->satisfied = nsat;
 			groundedClauses.push_back(clauses[i]);
-			groundedClauses.push_back(nClause);
+			groundedClauses.push_back(nClause); 
 		}
 		else
 		{
 			//clauses[i]->weight = clauses[i]->weight*(LogDouble(nLVTrue,false)+LogDouble(nLVFalse,false));
-			if((clauses[i]->sign[atomInd] && nLVTrue==0) ||
-					(!clauses[i]->sign[atomInd] && nLVFalse==0))
+			if((clauses[i]->sign[atomInd] && nLVTrue==0) || (!clauses[i]->sign[atomInd] && nLVFalse==0))
 				clauses[i]->satisfied = true;
 			clauses[i]->removeAtomWithWeightUpdation(atomInd);
 			groundedClauses.push_back(clauses[i]);

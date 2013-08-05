@@ -114,7 +114,8 @@ OBJS=$(OBJDIR)/arguments.o $(OBJDIR)/powerset.o \
 	$(OBJDIR)/randomgenutil.o \
 	$(OBJDIR)/testformulainfer.o \
 	$(OBJDIR)/lvrptptreesampling.o \
-	$(OBJDIR)/lvrptpsearchtree.o
+	$(OBJDIR)/lvrptpsearchtree.o \
+	$(OBJDIR)/lvgrbestimator.o
 
 	
 #add .cpp files (including executables') to CPPFILES.
@@ -158,6 +159,7 @@ CPPFILES=$(UTIL)/arguments.cpp $(UTIL)/powerset.cpp $(UTIL)/random.cpp\
 	$(LIFTEDINFERIS)$(SRCSUFFIX)/lisapproxinference.cpp \
 	$(LIFTEDINFERIS)$(SRCSUFFIX)/proposalconstructor.cpp \
 	$(LIFTEDINFERIS)$(SRCSUFFIX)/proposalstructure.cpp \
+	$(LIFTEDINFERIS)$(SRCSUFFIX)/lvgrbestimator.cpp \
 	$(LIFTEDINFERWM)$(SRCSUFFIX)/cache.cpp \
 	$(LIFTEDINFERWM)$(SRCSUFFIX)/extensions.cpp \
 	$(LIFTEDINFERWM)$(SRCSUFFIX)/ptpsearch.cpp \
@@ -349,6 +351,8 @@ $(OBJDIR)/proposalconstructor.o:
 	$(GPP) $(CFLAGS) -o $(OBJDIR)/proposalconstructor.o -c $(LIFTEDINFERIS)$(SRCSUFFIX)/proposalconstructor.cpp
 $(OBJDIR)/proposalstructure.o:
 	$(GPP) $(CFLAGS) -o $(OBJDIR)/proposalstructure.o -c $(LIFTEDINFERIS)$(SRCSUFFIX)/proposalstructure.cpp
+$(OBJDIR)/lvgrbestimator.o:
+	$(GPP) $(CFLAGS) -o $(OBJDIR)/lvgrbestimator.o -c $(LIFTEDINFERIS)$(SRCSUFFIX)/lvgrbestimator.cpp
 $(OBJDIR)/cache.o:
 	$(GPP) $(CFLAGS) -o $(OBJDIR)/cache.o -c $(LIFTEDINFERWM)$(SRCSUFFIX)/cache.cpp
 $(OBJDIR)/extensions.o:

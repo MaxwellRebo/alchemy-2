@@ -20,6 +20,7 @@ LProposalConstructor(LvrMLN& mln_);
 ~LProposalConstructor();
 void getParents(vector<WClause*> clauses,Atom* atom, vector<Atom*> potentialParents,vector<Atom*>& parents);
 void constructProposal(vector<WClause*>& clauses,vector<Atom*>& potentialParents);
+void constructProposalRB(vector<WClause*>& clauses,vector<Atom*>& potentialParents);
 void constructProposalV1(vector<WClause*>& CNF,vector<Atom*>& potentialParents);
 void print(){}
 void startConstruction(LvrParams* params);

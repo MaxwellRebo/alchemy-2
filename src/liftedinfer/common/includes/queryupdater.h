@@ -13,7 +13,12 @@ struct LvrQueryUpdater
 	void updateQueryValues(Atom* atom,int sampledTrueVal);
 	void updateQueryValues(Atom* atom,vector<bool> isolatedTerms,vector<int> sampledTrueVals);
 	void updateQueryValuesLVGibbs(Atom* atom,int sampledTrueVal);
+	//void updateQueryValuesLVGibbsRB(Atom* atom,LogDouble prob,int sampledvalue);
+	void updateQueryValuesLVGibbsRB(Atom* atom,vector<LogDouble> prob);
 	void updateDontCare();
+	void updateGibbsDontCareRB();
+	void writeGibbsRBToFile(int iterations);
+	void normalizeRB(int iterations);
 	static bool isInstanceCreated();
 	void normalize(int iterations);
 	void writeToFile(int numIterations);
@@ -27,6 +32,13 @@ struct LvrQueryUpdater
 		return false;
 	}
 	void updateExactQueryWeights(set<int> queryHashes,LogDouble value);
+	vector<double> getCurrentProbs()
+	{
+		return currentProbabilities;
+	}
+	void resetallupdateflags();
+	void updateAllImportanceWeightsRB(LogDouble currentIterWeight);
+	void updateISRBEstimates(Atom* atom,vector<LogDouble> probs);
 private:
 	LvrAtomHashTemplate<string>* queryHashTemplate;
 	LvrAtomHashTemplate<bool>* lvrAtomHashUpdateFlags;
@@ -39,10 +51,14 @@ private:
 	//used for importance sampling MAR, exact inference ptp
 	LvrAtomHashTemplate<LogDouble*>* cumulativeWeight;
 	LvrAtomHashTemplate<int>* currentSampledValue;
+	//Rao-Blackwell estimates
+	LvrAtomHashTemplate<LogDouble*>* rbestimates;
+
 	//store the norm ids for fast searching
 	map<int,bool> queryNormIds;
 	void doUpdateQueryValues(Atom* atom,int sampledTrueVal);
 	void doUpdateQueryValues(Atom* atom,vector<bool> isolatedTerms,vector<int> sampledTrueVals);
+	
 
 };
 #endif

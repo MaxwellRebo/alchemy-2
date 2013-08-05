@@ -159,6 +159,7 @@ bool LDecomposer::append_to_decomposer (vector<int> atom_list,vector<LvrTerm*> t
 			for(unsigned int k=0;k<unifiedIndex.size();k++)
 			{
 				Decomposer* newD = merge(tempD,decomposer_list[unifiedIndex[k]]);
+				delete tempD;
 				tempD = newD;
 			}
 
@@ -312,12 +313,17 @@ void LDecomposer::find_decomposer(vector<WClause*>& CNF,vector<Decomposer*>& dec
 			if(decomposer_list.size()==0)
 				break;
 			bool isDecomposer = true;
-			for(map<int,int>::iterator it1=decomposer_list[x]->atomCounter.begin();it1!=decomposer_list[x]->atomCounter.end();it1++)
+			if(decomposer_list[x]->decomposer_terms.size()!=CNF.size())
+				isDecomposer = false;
+			else
 			{
-				if(predicateCounter[it1->first]!=it1->second)
-				{
+				for(map<int,int>::iterator it1=decomposer_list[x]->atomCounter.begin();it1!=decomposer_list[x]->atomCounter.end();it1++)
+				{	
+					if(predicateCounter[it1->first]!=it1->second)
+					{
 					isDecomposer = false;
 					break;
+					}
 				}
 			}
 			if(!isDecomposer)

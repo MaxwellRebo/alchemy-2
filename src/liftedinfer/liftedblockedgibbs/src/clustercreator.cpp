@@ -376,6 +376,8 @@ void LClusterCreator::startClustering(LvrParams* params)
 		params->baselineCostMultiplicativeFactor = 1.25;
 
 	cout<<"Clustering Process::Setting baseline.. level "<<level<<endl;
+	time_t start;
+	time(&start);
 	for(unsigned int i=0;i<LVRClusterList.size();i++)
 	{
 		vector<WClause*> newClauses;
@@ -484,6 +486,14 @@ void LClusterCreator::startClustering(LvrParams* params)
 				LVRClusterList_orig[id1]->print();
 				LVRClusterList_orig[id2]->print();
 				cleanup(LVRClusterList_orig);
+				time_t curr;
+				time(&curr);
+				if(difftime(curr,start) > params->maxSeconds)
+				{
+					//end clustering
+					changed=false;
+					break;
+				}
 				break;
 			}
 			else
@@ -504,6 +514,14 @@ void LClusterCreator::startClustering(LvrParams* params)
 				computeClusterMB();
 			}
 			cleanup(LVRClusterList_orig);
+			time_t curr;
+			time(&curr);
+			if(difftime(curr,start) > params->maxSeconds)
+			{
+				//end clustering
+				changed=false;
+				break;
+			}
 		}
 		if(!changed)
 		{

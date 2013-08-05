@@ -1,7 +1,7 @@
 #include "proposalconstructor.h"
 #include "heuristics.h"
 #include "lvratomhashtemplate.h"
-
+#include "blockexactinference.h"
 
 LProposalConstructor::LProposalConstructor(LvrMLN& mln_):mln(mln_)
 {
@@ -90,6 +90,158 @@ void LProposalConstructor::getParents(vector<WClause*> clauses,Atom* atom, vecto
 	}
 }
 
+void LProposalConstructor::constructProposal(vector<WClause*>& CNF,vector<Atom*>& potentialParents)
+{
+	if(CNF.size()==0)
+		return;
+	int powerFactor;
+	bool isDecomposed = lsearch->decomposeCNF(CNF,powerFactor);
+	if(isDecomposed)
+	{
+		constructProposal(CNF,potentialParents);
+		return;
+	}
+	int singletonIndex;
+	bool singleton=false;
+	Atom* constatom=NULL;
+	Atom* otheratom=NULL;
+	Atom* singatom=NULL;
+	Atom* tmpAtom = NULL;
+	for(int ii=0;ii<CNF.size();ii++)	
+	{
+		bool foundatom=false;
+		for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+		{
+			otheratom = CNF[ii]->atoms[jj];
+			singleton = CNF[ii]->atoms[jj]->isSingletonAtom(singletonIndex);
+			if(singleton)
+			{
+				singatom = CNF[ii]->atoms[jj];
+				foundatom=true;
+				break;
+			}
+			else if(CNF[ii]->atoms[jj]->isConstant())
+				constatom = CNF[ii]->atoms[jj];
+		}
+		if(foundatom)
+			break;
+	}
+	if(singatom)
+		tmpAtom = singatom;
+	else if(constatom)
+		tmpAtom=constatom;
+	else
+		tmpAtom=otheratom;
+	if(tmpAtom == NULL)
+	{
+		cleanup(CNF);
+		return;
+	}
+	Atom* selectedAtom = LvrMLN::create_new_atom(tmpAtom);
+	vector<Atom*> parents;		
+	if(potentialParents.size() > 0)
+	{
+		getParents(CNF,selectedAtom,potentialParents,parents);	
+	}
+	//see if atom has isolated terms
+	vector<bool> isolatedTerms;
+	bool isIsolated = LRulesUtil::computeIsolatedTerms(selectedAtom,CNF,isolatedTerms);
+	lpd->insertElement(selectedAtom,parents,isolatedTerms);
+	potentialParents.push_back(selectedAtom);
+	//remove atom from all clauses
+	for(unsigned int i=0;i<CNF.size();i++)
+	{
+		for(int j=0;j<CNF[i]->atoms.size();j++)
+		{
+			if(CNF[i]->atoms[j]->symbol->id == selectedAtom->symbol->id)
+			{
+				CNF[i]->removeAtom(j);
+				j--;
+			}
+		}
+	}
+	constructProposal(CNF,potentialParents);
+	cleanup(CNF);
+}
+
+void LProposalConstructor::constructProposalRB(vector<WClause*>& CNF,vector<Atom*>& potentialParents)
+{
+	if(CNF.size()==0)
+		return;
+	int powerFactor;
+	bool isDecomposed = lsearch->decomposeCNF(CNF,powerFactor);
+	if(isDecomposed)
+	{
+		constructProposalRB(CNF,potentialParents);
+		return;
+	}
+	int singletonIndex;
+	bool singleton=false;
+	Atom* constatom=NULL;
+	Atom* otheratom=NULL;
+	Atom* singatom=NULL;
+	Atom* tmpAtom = NULL;
+	for(int ii=0;ii<CNF.size();ii++)	
+	{
+		bool foundatom=false;
+		for(int jj=0;jj<CNF[ii]->atoms.size();jj++)
+		{
+			if(LvrQueryUpdater::Instance()->isNormIdInQuery(CNF[ii]->atoms[jj]->symbol->normParentId))
+				continue;
+			otheratom = CNF[ii]->atoms[jj];
+			singleton = CNF[ii]->atoms[jj]->isSingletonAtom(singletonIndex);
+			if(singleton)
+			{
+				singatom = CNF[ii]->atoms[jj];
+				foundatom=true;
+				break;
+			}
+			else if(CNF[ii]->atoms[jj]->isConstant())
+				constatom = CNF[ii]->atoms[jj];
+		}
+		if(foundatom)
+			break;
+	}
+	if(singatom)
+		tmpAtom = singatom;
+	else if(constatom)
+		tmpAtom=constatom;
+	else
+		tmpAtom=otheratom;
+	if(tmpAtom == NULL)
+	{
+		cleanup(CNF);
+		return;
+	}
+	Atom* selectedAtom = LvrMLN::create_new_atom(tmpAtom);
+	vector<Atom*> parents;		
+	if(potentialParents.size() > 0)
+	{
+		getParents(CNF,selectedAtom,potentialParents,parents);	
+	}
+	//see if atom has isolated terms
+	vector<bool> isolatedTerms;
+	bool isIsolated = LRulesUtil::computeIsolatedTerms(selectedAtom,CNF,isolatedTerms);
+	lpd->insertElement(selectedAtom,parents,isolatedTerms);
+	potentialParents.push_back(selectedAtom);
+	//remove atom from all clauses
+	for(unsigned int i=0;i<CNF.size();i++)
+	{
+		for(int j=0;j<CNF[i]->atoms.size();j++)
+		{
+			if(CNF[i]->atoms[j]->symbol->id == selectedAtom->symbol->id)
+			{
+				CNF[i]->removeAtom(j);
+				j--;
+			}
+		}
+	}
+	constructProposalRB(CNF,potentialParents);
+	cleanup(CNF);
+}
+
+
+/*
 void LProposalConstructor::constructProposal(vector<WClause*>& CNF1,vector<Atom*>& potentialParents)
 {
 	if(CNF1.size()==0)
@@ -143,6 +295,7 @@ void LProposalConstructor::constructProposal(vector<WClause*>& CNF1,vector<Atom*
 		cleanup(CNF);
 	}
 }
+*/
 
 /*
 void LProposalConstructor::constructProposal(vector<WClause*>& CNF1,vector<Atom*>& potentialParents)
@@ -266,13 +419,44 @@ void LProposalConstructor::constructProposalV1(vector<WClause*>& CNF,vector<Atom
 void LProposalConstructor::startConstruction(LvrParams* params)
 {
 	cout<<"Constructing proposal distribution structure..."<<endl;
+	params->lisRB = false;
+	if(LvrQueryUpdater::isInstanceCreated())
+	{
+		//decide whether to rao-blackwelize
+		//check if the query set forms a tractable cluster
+		vector<WClause*> tmpclauses;
+		LvrMLN::copyAllClauses(mln.clauses,tmpclauses);
+		for(unsigned int i=0;i<tmpclauses.size();i++)
+		{
+			for(unsigned int j=0;j<tmpclauses[i]->atoms.size();j++)
+			{
+				if(!LvrQueryUpdater::Instance()->isNormIdInQuery(tmpclauses[i]->atoms[j]->symbol->normParentId))
+				{
+					tmpclauses[i]->removeAtom(j);
+					j--;
+				}
+			}
+		}	
+		LBlockExactInference* lbinfer =  new LBlockExactInference(mln);
+		int lvpCost;
+		if(lbinfer->doMockInferenceOnCluster(tmpclauses,lvpCost,RAND_MAX) >= 0)
+		{
+			params->lisRB = true;
+		}
+		cleanup(tmpclauses);
+		delete lbinfer;
+	}
+	
 	vector<Atom*> potentialParents;
 	vector<WClause*> nClauses;
 	LvrMLN::copyAllClauses(mln.clauses,nClauses);
 	lpd = new LProposalDistribution(params->samplingMode);
 	if(params->samplingMode == EINFORMED)
 	{
-		constructProposal(nClauses,potentialParents);	
+		if(!params->lisRB)
+			constructProposal(nClauses,potentialParents);
+		else
+			constructProposalRB(nClauses,potentialParents);
 	}
 	else
 	{

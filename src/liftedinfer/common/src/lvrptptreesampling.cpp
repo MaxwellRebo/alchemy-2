@@ -2,6 +2,7 @@
 #include "randomgenutil.h"
 #include <assert.h>
 #include "hashalgorithm.h"
+#include "queryupdater.h"
 
 bool compareChildren(LPTPNode* l1, LPTPNode* l2)
 {
@@ -96,6 +97,28 @@ void LvrPTPTreeSampling::sampleTree(LPTPNode* node,vector<map<int,int>* >& added
 				}
 
 			}
+
+			if(rbEstimator && !burnin)
+			{
+				//Rao-Blackwellization
+				/*for(unsigned int r=0;r<newAtom->getNumberOfGroundings();r++)
+				{
+					LogDouble lvrprob_rb = node->getProbability(r);
+					//update the query atoms probabilities using the RB estimator
+					LvrQueryUpdater::Instance()->updateQueryValuesLVGibbsRB(newAtom,lvrprob_rb,index);
+
+				}
+				*/
+				vector<LogDouble> lvrprobs;
+				for(unsigned int r=0;r<node->zValues.size();r++)
+				{
+					lvrprobs.push_back(node->zValues[r]*node->binCoeff[r]/node->norm);
+					//cout<<node->zValues[r]/node->norm<<" ";
+				}
+				//cout<<endl;
+				LvrQueryUpdater::Instance()->updateQueryValuesLVGibbsRB(newAtom,lvrprobs);
+			}
+
 			ptpTree->sampledAssignments.atoms.push_back(newAtom);
 			ptpTree->sampledAssignments.assignment.push_back(index);
 			//newAtom->print();cout<<endl;
@@ -107,9 +130,17 @@ void LvrPTPTreeSampling::sampleTree(LPTPNode* node,vector<map<int,int>* >& added
 			double u = LvRandomGenUtil::Instance()->getNormRand();
 			LogDouble lu(u,false);
 			int index = lower_bound(node->cdf.begin(),node->cdf.end(),lu) - node->cdf.begin();
+			if(rbEstimator && !burnin)
+			{
+				vector<LogDouble> lvrprobs;
+				for(unsigned int r=0;r<node->zValues.size();r++)
+				{
+					lvrprobs.push_back(node->zValues[r]*node->binCoeff[r]/node->norm);
+				}
+				LvrQueryUpdater::Instance()->updateQueryValuesLVGibbsRB(node->atom,lvrprobs);
+			}
 			ptpTree->sampledAssignments.atoms.push_back(LvrMLN::create_new_atom(node->atom));
 			ptpTree->sampledAssignments.assignment.push_back(index);
-			//node->atom->print();cout<<endl;
 			nextInd = index;
 		}
 		//take sampled branch child node
@@ -210,8 +241,10 @@ LPTPNode* LvrPTPTreeSampling::getRoot()
 	return NULL;
 }
 
-int LvrPTPTreeSampling::startNewSampling()
+int LvrPTPTreeSampling::startNewSampling(bool rbestimator_,bool burnin_)
 {
+	rbEstimator = rbestimator_;
+	burnin = burnin_;
 	traverseTree(0);
 	LPTPNode* root;
 	root = getRoot();

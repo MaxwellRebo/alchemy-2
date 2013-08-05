@@ -28,7 +28,7 @@ struct LBlockExactInference
 		delete lvrPTPTreeSampling;
 	}
 	LogDouble weightedModelCount(vector<WClause*>& CNF,int parentId = -1,int branchNo = -1);
-	int doExactInferenceOnCluster(vector<WClause*>& CNF);
+	int doExactInferenceOnCluster(vector<WClause*>& CNF,bool rbestimator,bool burnin);
 	int doMockInferenceOnCluster(vector<WClause*>& CNF,int& lvpCost,int remainingCost);
 	LPTPTree& getPTPTreeRef()
 	{
@@ -52,6 +52,7 @@ private:
 	LvrSingletonNormPropagation* lvrSingletonNormPropagation;
 	time_t startTime;
 	LvrPTPTreeSampling* lvrPTPTreeSampling;
+	bool burnin;
 };
 
 

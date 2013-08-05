@@ -79,7 +79,7 @@ struct LPTPNode
 			cdf[zValues.size()-1]=LogDouble(1,false);			
 		}
 		
-}
+	}
 
 
 	void print()

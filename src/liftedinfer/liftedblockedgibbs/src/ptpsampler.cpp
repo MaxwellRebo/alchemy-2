@@ -21,14 +21,14 @@ int LPTPSampler::runMockPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster,int& lv
 	return ls->doMockInferenceOnCluster(CNF,lvpCost,remainingCost);
 }
 
-int LPTPSampler::runPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster)
+int LPTPSampler::runPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster,bool rbestimator)
 {
 	if(lvrCluster->isUniConstantCluster())
 	{
-		doLightWeightSampling(lvrCluster,CNF);
+		doLightWeightSampling(lvrCluster,CNF,rbestimator);
 		return 0;
 	}
-	int ret = ls->doExactInferenceOnCluster(CNF);
+	int ret = ls->doExactInferenceOnCluster(CNF,rbestimator,burnIn);
 	if( ret <= 0)
 		return ret;
 	lvrCluster->resetAllAssignments();	
@@ -69,7 +69,8 @@ int LPTPSampler::runPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster)
 		//check if not burning in,only then update query
 		if(!burnIn)
 		{
-			LvrQueryUpdater::Instance()->updateQueryValuesLVGibbs(ls->getPTPTreeRef().sampledAssignments.atoms[i],ls->getPTPTreeRef().sampledAssignments.assignment[i]);
+			if(!rbestimator)
+				LvrQueryUpdater::Instance()->updateQueryValuesLVGibbs(ls->getPTPTreeRef().sampledAssignments.atoms[i],ls->getPTPTreeRef().sampledAssignments.assignment[i]);
 		}
 	}
 	lvrCluster->setAllDontCareAssignments();
@@ -79,7 +80,7 @@ int LPTPSampler::runPTP(vector<WClause*>& CNF,LVRCluster* lvrCluster)
 
 
 //if we know our cluster is a single propositional element, we can do fast sampling
-void LPTPSampler::doLightWeightSampling(LVRCluster* lvrCluster, vector<WClause*> clauses)
+void LPTPSampler::doLightWeightSampling(LVRCluster* lvrCluster, vector<WClause*> clauses,bool rbestimator)
 {
 	int atomId = lvrCluster->elements[0]->symbol->id;
 	LogDouble posWt(1,false);
@@ -128,6 +129,7 @@ void LPTPSampler::doLightWeightSampling(LVRCluster* lvrCluster, vector<WClause*>
 		delete clauses[i];
 	}
 	int assignment = 0;
+	vector<LogDouble> probs(2);
 	if(!dontcare)
 	{
 		LogDouble posWt1 = posWt/(posWt + negWt);
@@ -137,6 +139,8 @@ void LPTPSampler::doLightWeightSampling(LVRCluster* lvrCluster, vector<WClause*>
 		//sample the assignment		
 		if(lr > negWt1)
 			assignment = 1;
+		probs[0] = negWt1;
+		probs[1] = posWt1;
 	}
 	else
 	{
@@ -144,12 +148,20 @@ void LPTPSampler::doLightWeightSampling(LVRCluster* lvrCluster, vector<WClause*>
 		//sample the assignment
 		if(r > 0.5)
 			assignment = 1;
+		probs[0] = LogDouble(0.5,false);
+		probs[1] = LogDouble(0.5,false);
 	}
 	lvrCluster->lAssignments[0].at(0)->nTrueValues = assignment;
 	lvrCluster->lAssignments[0].at(0)->nFalseValues = 1 - assignment;
 	if(!burnIn)
 	{
-		LvrQueryUpdater::Instance()->updateQueryValuesLVGibbs(lvrCluster->elements[0],assignment);
+		if(rbestimator)
+		{
+			//LvrQueryUpdater::Instance()->updateQueryValuesLVGibbsRB(lvrCluster->elements[0],prob,assignment);
+			LvrQueryUpdater::Instance()->updateQueryValuesLVGibbsRB(lvrCluster->elements[0],probs);
+		}
+		else
+			LvrQueryUpdater::Instance()->updateQueryValuesLVGibbs(lvrCluster->elements[0],assignment);
 	}
 
 	clauses.clear();

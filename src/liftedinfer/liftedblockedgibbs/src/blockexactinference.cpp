@@ -307,7 +307,7 @@ LogDouble LBlockExactInference::weightedModelCount(vector<WClause*>& CNF,int par
 			{
 				cleanupItems(decomposedList,t);
 				nonPolyNodeFound = true;
-				atom->print();
+				//atom->print();
 				delete atom;
 				return LogDouble(0,false);
 			}
@@ -478,7 +478,7 @@ LBlockExactInference::LBlockExactInference(LvrMLN& mln_): mln(mln_)
 	nonPolyNodeFound = false;
 }
 
-int LBlockExactInference::doExactInferenceOnCluster(vector<WClause*>& CNF)
+int LBlockExactInference::doExactInferenceOnCluster(vector<WClause*>& CNF,bool rbestimator,bool burnin)
 {
 	lvrPTPTreeSampling->cleanTree();
 	id = 0;
@@ -488,8 +488,8 @@ int LBlockExactInference::doExactInferenceOnCluster(vector<WClause*>& CNF)
 	if(nonPolyNodeFound)
 	{
 		return -1;
-	}	
-	return lvrPTPTreeSampling->startNewSampling();
+	}
+	return lvrPTPTreeSampling->startNewSampling(rbestimator,burnin);
 }
 
 int LBlockExactInference::doMockInferenceOnCluster(vector<WClause*>& CNF,int& lvpCost,int remainingCost)

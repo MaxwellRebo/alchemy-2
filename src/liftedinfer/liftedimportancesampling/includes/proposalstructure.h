@@ -15,10 +15,10 @@ struct LProposalTable
 	int getTableSize(int index);
 	LogDouble getDistributionValue(int index,int numTrue);
 	LogDouble getNormConstant(int index);
-private:
 	vector<vector<LogDouble> > distribution;
 	vector<vector<int> > adaptiveMLECounter;
 	vector<int> totalSamplesCollected;
+private:
 	int maxTruthValue;
 	vector<LogDouble> normConstants;
 };
